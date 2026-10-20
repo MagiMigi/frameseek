@@ -1,0 +1,632 @@
+// Seek bar controller: one instance per <video>. The UI lives in a Shadow DOM so
+// Instagram's CSS can't reach it and ours can't leak out.
+// Loaded as a classic content script; exposes globalThis.ReelSeek.SeekBar.
+(() => {
+  'use strict';
+
+  const { SPEEDS } = globalThis.ReelSeekSettings;
+  const CLICK_SPEEDS = [0.5, 1, 1.25, 1.5, 2];
+  const ZONE_PX = 72; // bottom strip of the video that reveals the time/speed controls
+  const END_MARGIN = 0.1; // never seek exactly onto the end, it would loop or stop the video
+  const SIZE_TOLERANCE = 4;
+  const SEEK_SETTLE_MS = 250;
+  const FLASH_MS = 650;
+  const TOUCH_ZONE_MS = 3000;
+
+  // Events from our controls must not reach Instagram, or a click on the bar would also
+  // pause, mute or "double-tap like" the video.
+  const SWALLOWED_EVENTS = [
+    'click', 'dblclick', 'auxclick', 'contextmenu',
+    'mousedown', 'mouseup', 'pointerdown', 'pointerup',
+    'touchstart', 'touchend',
+  ];
+
+  const CSS = `
+    :host { all: initial; }
+    [hidden] { display: none !important; }
+
+    .root {
+      --accent: #ff3d5a;
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      color: #fff;
+      font: 500 12px/1 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .root.no-duration > :not(.flash) { display: none; }
+
+    .hit {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 16px;
+      pointer-events: auto;
+      cursor: pointer;
+      touch-action: none;
+    }
+    .track {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.25);
+      transition: height 0.12s ease, bottom 0.12s ease, left 0.12s ease, right 0.12s ease;
+    }
+    .root.zone .track,
+    .root.hover-bar .track,
+    .root.dragging .track {
+      left: 10px;
+      right: 10px;
+      bottom: 6px;
+      height: 4px;
+    }
+    .root.hover-bar .track,
+    .root.dragging .track { height: 6px; }
+
+    .fill {
+      position: absolute;
+      inset: 0;
+      transform: scaleX(0);
+      transform-origin: left center;
+    }
+    .buffered { background: rgba(255, 255, 255, 0.35); }
+    .hover { background: rgba(255, 255, 255, 0.5); opacity: 0; }
+    .root.hover-bar .hover { opacity: 1; }
+    .root.dragging .hover { opacity: 0; }
+    .played { background: var(--accent); }
+
+    .knob {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 13px;
+      height: 13px;
+      margin: -6.5px 0 0 -6.5px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 3px rgba(0, 0, 0, 0.4);
+      transform: scale(0);
+      transition: transform 0.12s ease;
+    }
+    .root.hover-bar .knob,
+    .root.dragging .knob { transform: scale(1); }
+
+    .tip {
+      position: absolute;
+      left: 0;
+      bottom: 52px;
+      padding: 5px 7px;
+      border-radius: 4px;
+      background: rgba(20, 20, 20, 0.85);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      transform: translateX(-50%);
+      opacity: 0;
+      transition: opacity 0.1s ease;
+    }
+    .root.hover-bar .tip,
+    .root.dragging .tip { opacity: 1; }
+
+    .controls {
+      position: absolute;
+      left: 10px;
+      bottom: 22px;
+      display: flex;
+      gap: 6px;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    .root.zone .controls,
+    .root.hover-bar .controls,
+    .root.dragging .controls { opacity: 1; }
+    .controls > * { pointer-events: none; }
+    .root.zone .controls > *,
+    .root.hover-bar .controls > * { pointer-events: auto; }
+
+    .pill {
+      box-sizing: border-box;
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      margin: 0;
+      padding: 0 8px;
+      border: 0;
+      border-radius: 11px;
+      background: rgba(20, 20, 20, 0.65);
+      color: #fff;
+      font: inherit;
+      font-variant-numeric: tabular-nums;
+    }
+    .speed { cursor: pointer; }
+    .speed:hover { background: rgba(20, 20, 20, 0.85); }
+    .speed:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+    .flash {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: rgba(20, 20, 20, 0.7);
+      font-size: 18px;
+      font-weight: 600;
+      white-space: nowrap;
+      transform: translate(-50%, -50%) scale(0.92);
+      opacity: 0;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+    .flash.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+    @media (pointer: coarse) {
+      .hit { height: 28px; }
+      .controls { bottom: 34px; }
+      .tip { bottom: 64px; }
+    }
+  `;
+
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  function h(tag, className, attrs = {}) {
+    const el = document.createElement(tag);
+    el.className = className;
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    return el;
+  }
+
+  function formatTime(sec) {
+    const s = Math.floor(Number.isFinite(sec) && sec > 0 ? sec : 0);
+    const hh = Math.floor(s / 3600);
+    const mm = Math.floor((s % 3600) / 60);
+    const ss = String(s % 60).padStart(2, '0');
+    return hh ? `${hh}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`;
+  }
+
+  const formatRate = (rate) => `${Number(rate.toFixed(2))}×`;
+
+  // Instagram stacks transparent click-catching overlays as siblings of the video's
+  // wrapper. Mounting at the highest ancestor with the same box as the video puts our bar
+  // above them. Prefer an already-positioned ancestor so we never change Instagram's layout.
+  function findMount(video) {
+    const vr = video.getBoundingClientRect();
+    const sameBox = (r) =>
+      Math.abs(r.left - vr.left) <= SIZE_TOLERANCE &&
+      Math.abs(r.top - vr.top) <= SIZE_TOLERANCE &&
+      Math.abs(r.width - vr.width) <= SIZE_TOLERANCE &&
+      Math.abs(r.height - vr.height) <= SIZE_TOLERANCE;
+
+    const chain = [];
+    for (let el = video.parentElement; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+      if (!sameBox(el.getBoundingClientRect())) break;
+      chain.push(el);
+    }
+    for (let i = chain.length - 1; i >= 0; i--) {
+      if (getComputedStyle(chain[i]).position !== 'static') return { el: chain[i], needsPosition: false };
+    }
+    const el = chain[chain.length - 1] ?? video.parentElement;
+    return el ? { el, needsPosition: getComputedStyle(el).position === 'static' } : null;
+  }
+
+  class SeekBar {
+    constructor(video, settings, hooks = {}) {
+      this.video = video;
+      this.hooks = hooks;
+      this.settings = settings;
+      this.mountEl = null;
+      this.restorePosition = null;
+      this.visible = true;
+      this.dragging = false;
+      this.dragTime = 0;
+      this.pendingSeek = null;
+      this.lastSeekAt = 0;
+      this.frame = 0;
+      this.seekFrame = 0;
+      this.flashTimer = 0;
+      this.zoneTimer = 0;
+      this.desiredRate = null;
+      this.rateFixes = 0;
+      this.lastText = '';
+      this.destroyed = false;
+
+      this.build();
+      this.mount();
+      this.listen();
+      this.updateSettings(settings);
+      this.render();
+      this.renderSpeed();
+      this.startLoop();
+    }
+
+    // ---- setup ---------------------------------------------------------------
+
+    build() {
+      this.host = document.createElement('div');
+      this.host.setAttribute('data-reelseek', '');
+      this.host.style.cssText =
+        'all: initial !important; position: absolute !important; inset: 0 !important; display: block !important;' +
+        'z-index: 2147483000 !important; pointer-events: none !important;';
+
+      const shadow = this.host.attachShadow({ mode: 'open' });
+      const style = document.createElement('style');
+      style.textContent = CSS;
+
+      this.root = h('div', 'root no-duration');
+      this.flashEl = h('div', 'flash', { 'aria-hidden': 'true' });
+      this.controls = h('div', 'controls');
+      this.timeEl = h('span', 'pill time');
+      this.speedBtn = h('button', 'pill speed', { type: 'button', title: 'Playback speed', 'aria-label': 'Playback speed' });
+      this.controls.append(this.timeEl, this.speedBtn);
+
+      this.tip = h('div', 'tip', { 'aria-hidden': 'true' });
+      this.hit = h('div', 'hit', { role: 'slider', 'aria-label': 'Seek', 'aria-valuemin': '0' });
+      this.track = h('div', 'track');
+      this.buffered = h('div', 'fill buffered');
+      this.hoverFill = h('div', 'fill hover');
+      this.played = h('div', 'fill played');
+      this.knob = h('div', 'knob');
+      this.track.append(this.buffered, this.hoverFill, this.played, this.knob);
+      this.hit.append(this.track);
+
+      this.root.append(this.flashEl, this.controls, this.tip, this.hit);
+      shadow.append(style, this.root);
+    }
+
+    mount() {
+      const found = findMount(this.video);
+      if (!found) return;
+      const { el, needsPosition } = found;
+      if (needsPosition) {
+        this.restorePosition = el.style.position;
+        el.style.position = 'relative';
+      }
+      el.appendChild(this.host);
+      el.addEventListener('pointermove', this.onZoneMove, { passive: true });
+      el.addEventListener('pointerdown', this.onZoneDown, { passive: true, capture: true });
+      el.addEventListener('pointerleave', this.onZoneLeave, { passive: true });
+      this.mountEl = el;
+    }
+
+    unmount() {
+      const el = this.mountEl;
+      if (el) {
+        el.removeEventListener('pointermove', this.onZoneMove);
+        el.removeEventListener('pointerdown', this.onZoneDown, { capture: true });
+        el.removeEventListener('pointerleave', this.onZoneLeave);
+        if (this.restorePosition !== null) el.style.position = this.restorePosition;
+      }
+      this.restorePosition = null;
+      this.mountEl = null;
+      this.host.remove();
+    }
+
+    // Instagram re-renders a lot; put the bar back if our host got detached or moved away.
+    ensureMounted() {
+      if (this.mountEl && this.host.parentNode === this.mountEl && this.mountEl.contains(this.video)) return;
+      this.unmount();
+      this.mount();
+    }
+
+    listen() {
+      const v = this.video;
+      this.videoListeners = [
+        ['play', this.onPlay],
+        ['playing', this.onPlay],
+        ['loadedmetadata', this.onPlay],
+        ['pause', this.onRender],
+        ['ended', this.onRender],
+        ['timeupdate', this.onRender],
+        ['durationchange', this.onRender],
+        ['progress', this.onRender],
+        ['emptied', this.onRender],
+        ['seeked', this.onSeeked],
+        ['ratechange', this.onRateChange],
+      ];
+      for (const [type, fn] of this.videoListeners) v.addEventListener(type, fn);
+
+      this.io = new IntersectionObserver((entries) => {
+        this.visible = entries[entries.length - 1].isIntersecting;
+        if (this.visible) this.startLoop();
+      });
+      this.io.observe(v);
+
+      this.hit.addEventListener('pointerdown', this.onHitDown);
+      this.hit.addEventListener('pointermove', this.onHitMove);
+      this.hit.addEventListener('pointerup', this.onHitUp);
+      this.hit.addEventListener('pointercancel', this.onHitCancel);
+      this.hit.addEventListener('pointerenter', this.onHitEnter);
+      this.hit.addEventListener('pointerleave', this.onHitLeave);
+
+      this.speedBtn.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus where it was
+      this.speedBtn.addEventListener('click', () => this.cycleSpeed());
+
+      for (const type of SWALLOWED_EVENTS) {
+        this.root.addEventListener(type, (e) => e.stopPropagation(), { passive: true });
+      }
+    }
+
+    updateSettings(settings) {
+      this.settings = settings;
+      this.speedBtn.hidden = !settings.showSpeed;
+      if (settings.rememberSpeed && Math.abs(settings.speed - this.video.playbackRate) > 0.001) {
+        this.setSpeed(settings.speed);
+      }
+    }
+
+    destroy({ resetSpeed = false } = {}) {
+      if (this.destroyed) return;
+      this.destroyed = true;
+      cancelAnimationFrame(this.frame);
+      cancelAnimationFrame(this.seekFrame);
+      clearTimeout(this.flashTimer);
+      clearTimeout(this.zoneTimer);
+      this.io.disconnect();
+      for (const [type, fn] of this.videoListeners) this.video.removeEventListener(type, fn);
+      if (resetSpeed && this.desiredRate !== null) {
+        this.video.defaultPlaybackRate = 1;
+        this.video.playbackRate = 1;
+      }
+      this.unmount();
+    }
+
+    // ---- rendering -----------------------------------------------------------
+
+    get duration() {
+      const d = this.video.duration;
+      return Number.isFinite(d) && d > 0 ? d : 0;
+    }
+
+    get maxTime() {
+      return Math.max(0, this.duration - END_MARGIN);
+    }
+
+    shouldLoop() {
+      return !this.destroyed && (this.dragging || (this.visible && !this.video.paused));
+    }
+
+    startLoop() {
+      if (!this.frame && this.shouldLoop()) this.frame = requestAnimationFrame(this.tick);
+    }
+
+    tick = () => {
+      this.frame = 0;
+      this.render();
+      this.startLoop();
+    };
+
+    render() {
+      const dur = this.duration;
+      this.root.classList.toggle('no-duration', !dur);
+      if (!dur) return;
+
+      const cur = this.dragging ? this.dragTime : this.pendingSeek ?? this.video.currentTime;
+      const p = clamp(cur / dur, 0, 1);
+      this.played.style.transform = `scaleX(${p})`;
+      this.knob.style.left = `${p * 100}%`;
+      this.buffered.style.transform = `scaleX(${clamp(this.bufferedEnd(cur) / dur, 0, 1)})`;
+
+      const text = `${formatTime(cur)} / ${formatTime(dur)}`;
+      if (text !== this.lastText) {
+        this.lastText = text;
+        this.timeEl.textContent = text;
+        this.hit.setAttribute('aria-valuemax', String(Math.round(dur)));
+        this.hit.setAttribute('aria-valuenow', String(Math.round(cur)));
+        this.hit.setAttribute('aria-valuetext', text);
+      }
+    }
+
+    bufferedEnd(t) {
+      const b = this.video.buffered;
+      for (let i = 0; i < b.length; i++) {
+        if (b.start(i) <= t + 0.5 && b.end(i) >= t) return b.end(i);
+      }
+      return 0;
+    }
+
+    renderSpeed() {
+      this.speedBtn.textContent = formatRate(this.video.playbackRate || 1);
+    }
+
+    flash(text) {
+      this.flashEl.textContent = text;
+      this.flashEl.classList.add('show');
+      clearTimeout(this.flashTimer);
+      this.flashTimer = setTimeout(() => this.flashEl.classList.remove('show'), FLASH_MS);
+    }
+
+    showTip(clientX) {
+      const dur = this.duration;
+      if (!dur) return;
+      const tr = this.track.getBoundingClientRect();
+      const rr = this.root.getBoundingClientRect();
+      const p = clamp((clientX - tr.left) / tr.width, 0, 1);
+      this.tip.textContent = formatTime(p * dur);
+      this.hoverFill.style.transform = `scaleX(${p})`;
+      const half = this.tip.offsetWidth / 2;
+      const x = clamp(tr.left + p * tr.width - rr.left, half + 4, rr.width - half - 4);
+      this.tip.style.left = `${x}px`;
+    }
+
+    // ---- seeking -------------------------------------------------------------
+
+    timeAt(clientX) {
+      const tr = this.track.getBoundingClientRect();
+      const p = clamp((clientX - tr.left) / tr.width, 0, 1);
+      return clamp(p * this.duration, 0, this.maxTime);
+    }
+
+    // Seeks requested while dragging are coalesced to one per frame, and wait for the
+    // previous seek to land, so a fast drag doesn't queue up dozens of seeks.
+    requestSeek(t) {
+      this.pendingSeek = t;
+      if (!this.seekFrame) {
+        this.seekFrame = requestAnimationFrame(() => {
+          this.seekFrame = 0;
+          this.flushSeek();
+        });
+      }
+    }
+
+    flushSeek() {
+      if (this.pendingSeek === null) return;
+      if (this.video.seeking && performance.now() - this.lastSeekAt < SEEK_SETTLE_MS) return; // onSeeked retries
+      const t = this.pendingSeek;
+      this.pendingSeek = null;
+      this.lastSeekAt = performance.now();
+      if (typeof this.video.fastSeek === 'function') this.video.fastSeek(t);
+      else this.video.currentTime = t;
+    }
+
+    seekNow(t) {
+      cancelAnimationFrame(this.seekFrame);
+      this.seekFrame = 0;
+      this.pendingSeek = null;
+      this.lastSeekAt = performance.now();
+      this.video.currentTime = t;
+      this.render();
+    }
+
+    // Used by the keyboard shortcuts. Returns false if this video can't be seeked yet.
+    seekBy(delta) {
+      if (!this.duration) return false;
+      const base = this.pendingSeek ?? this.video.currentTime;
+      this.seekNow(clamp(base + delta, 0, this.maxTime));
+      this.flash(`${delta < 0 ? '−' : '+'}${Math.abs(delta)}s`);
+      return true;
+    }
+
+    // ---- speed ---------------------------------------------------------------
+
+    setSpeed(rate) {
+      this.desiredRate = rate;
+      this.rateFixes = 0;
+      this.video.defaultPlaybackRate = rate; // survives a source change on the same element
+      this.video.playbackRate = rate;
+      this.renderSpeed();
+    }
+
+    changeSpeed(rate) {
+      this.setSpeed(rate);
+      this.flash(formatRate(rate));
+      this.hooks.onSpeedChange?.(this, rate);
+    }
+
+    cycleSpeed() {
+      const cur = this.video.playbackRate;
+      this.changeSpeed(CLICK_SPEEDS.find((s) => s > cur + 0.001) ?? CLICK_SPEEDS[0]);
+    }
+
+    stepSpeed(dir) {
+      const cur = this.video.playbackRate;
+      let idx = 0;
+      SPEEDS.forEach((s, i) => {
+        if (Math.abs(s - cur) < Math.abs(SPEEDS[idx] - cur)) idx = i;
+      });
+      this.changeSpeed(SPEEDS[clamp(idx + dir, 0, SPEEDS.length - 1)]);
+    }
+
+    // ---- event handlers ------------------------------------------------------
+
+    onRender = () => this.render();
+
+    onPlay = () => {
+      if (this.desiredRate !== null && Math.abs(this.video.playbackRate - this.desiredRate) > 0.001) {
+        this.video.playbackRate = this.desiredRate;
+      }
+      this.render();
+      this.startLoop();
+    };
+
+    onSeeked = () => {
+      this.flushSeek();
+      this.render();
+    };
+
+    onRateChange = () => {
+      this.renderSpeed();
+      if (this.desiredRate === null || Math.abs(this.video.playbackRate - this.desiredRate) < 0.001) return;
+      if (this.rateFixes++ > 20) return; // something keeps overriding the speed; stop fighting it
+      this.video.playbackRate = this.desiredRate;
+    };
+
+    onHitDown = (e) => {
+      if (e.button !== 0 || !this.duration) return;
+      e.preventDefault();
+      this.dragging = true;
+      this.root.classList.add('dragging');
+      try {
+        this.hit.setPointerCapture(e.pointerId);
+      } catch {
+        // Capture can fail if the pointer is already gone; dragging still works while inside.
+      }
+      this.dragTo(e.clientX);
+      this.startLoop();
+    };
+
+    onHitMove = (e) => {
+      this.showTip(e.clientX);
+      if (this.dragging) this.dragTo(e.clientX);
+    };
+
+    onHitUp = (e) => {
+      if (!this.dragging) return;
+      this.dragTime = this.timeAt(e.clientX);
+      this.endDrag();
+    };
+
+    onHitCancel = () => {
+      if (this.dragging) this.endDrag();
+    };
+
+    onHitEnter = (e) => {
+      this.root.classList.add('hover-bar');
+      this.showTip(e.clientX);
+    };
+
+    onHitLeave = () => {
+      this.root.classList.remove('hover-bar');
+    };
+
+    dragTo(clientX) {
+      this.dragTime = this.timeAt(clientX);
+      this.requestSeek(this.dragTime);
+      this.showTip(clientX);
+      this.render();
+    }
+
+    endDrag() {
+      const t = this.dragTime;
+      this.dragging = false;
+      this.root.classList.remove('dragging');
+      this.seekNow(t); // exact seek on release
+    }
+
+    onZoneMove = (e) => {
+      if (e.pointerType === 'touch') return;
+      const r = this.root.getBoundingClientRect();
+      this.root.classList.toggle('zone', e.clientY >= r.bottom - ZONE_PX && e.clientY <= r.bottom);
+    };
+
+    // Touch screens have no hover, so a tap near the bottom shows the controls for a while.
+    onZoneDown = (e) => {
+      if (e.pointerType !== 'touch') return;
+      const r = this.root.getBoundingClientRect();
+      if (e.clientY < r.bottom - ZONE_PX) return;
+      this.root.classList.add('zone');
+      clearTimeout(this.zoneTimer);
+      this.zoneTimer = setTimeout(() => {
+        if (!this.dragging) this.root.classList.remove('zone');
+      }, TOUCH_ZONE_MS);
+    };
+
+    onZoneLeave = (e) => {
+      if (e.pointerType !== 'touch' && !this.dragging) this.root.classList.remove('zone');
+    };
+  }
+
+  globalThis.ReelSeek = Object.freeze({ SeekBar, formatTime });
+})();

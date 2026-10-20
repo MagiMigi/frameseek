@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReelSeek Harness</title>
+    <style>
+      :root {
+        --bg: #fafafa;
+        --fg: #111;
+        --card: #fff;
+        --line: #dbdbdb;
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 14px/1.4 system-ui, sans-serif;
+      }
+      #app {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 24px;
+        padding: 16px 16px 120px;
+        margin-right: 340px;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      article {
+        width: min(470px, 100%);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--card);
+        overflow: hidden;
+      }
+      article > header {
+        padding: 10px 12px;
+        font-weight: 600;
+      }
+      /* Instagram-like: positioned media box, static wrappers, sibling click overlay. */
+      .media {
+        position: relative;
+        aspect-ratio: 4 / 5;
+        background: #000;
+        overflow: hidden;
+      }
+      .media.reel {
+        aspect-ratio: 9 / 16;
+      }
+      .wrap,
+      .wrap2 {
+        width: 100%;
+        height: 100%;
+      }
+      .media video {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .ig-overlay {
+        position: absolute;
+        inset: 0;
+      }
+      .ig-mute {
+        position: absolute;
+        right: 12px;
+        bottom: 12px;
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        cursor: pointer;
+      }
+      .ig-caption {
+        position: absolute;
+        left: 12px;
+        right: 60px;
+        bottom: 16px;
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+        pointer-events: none;
+      }
+      /* No positioned ancestor at all: the extension has to add position: relative. */
+      .static-box video {
+        display: block;
+        width: 100%;
+      }
+      #log {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 340px;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 12px;
+        overflow: auto;
+        border-left: 1px solid var(--line);
+        background: #111;
+        color: #8f8;
+        font: 12px/1.5 ui-monospace, Consolas, monospace;
+        white-space: pre-wrap;
+      }
+      textarea {
+        width: min(470px, 100%);
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="toolbar">
+        <button id="add">Add video</button>
+        <button id="remove">Remove first video</button>
+        <button id="clearLog">Clear log</button>
+        <label><input type="checkbox" data-setting="enabled" /> enabled</label>
+        <label><input type="checkbox" data-setting="keyboard" /> keyboard</label>
+        <label><input type="checkbox" data-setting="showSpeed" /> speed</label>
+        <label><input type="checkbox" data-setting="rememberSpeed" /> remember speed</label>
+      </div>
+      <textarea id="comment" rows="2" placeholder="Type here: arrow keys must move the caret, not seek"></textarea>
+      <div id="feed"></div>
+    </div>
+    <pre id="log"></pre>
+
+    <script>
+      // Public sample clips; override with ?src=URL to test a longer video.
+      const params = new URLSearchParams(location.search);
+      const SOURCES = params.has('src')
+        ? [params.get('src')]
+        : [
+            'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
+            'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+            'https://www.w3schools.com/html/mov_bbb.mp4',
+          ];
+
+      const logEl = document.getElementById('log');
+      const feed = document.getElementById('feed');
+      window.igEvents = [];
+      function log(msg) {
+        window.igEvents.push(msg);
+        logEl.textContent += msg + '\n';
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      let count = 0;
+      function makePost(kind) {
+        const n = ++count;
+        const src = SOURCES[(n - 1) % SOURCES.length];
+        const article = document.createElement('article');
+        const header = document.createElement('header');
+        header.textContent = `post ${n} (${kind})`;
+        article.append(header);
+
+        const video = document.createElement('video');
+        video.src = src;
+        video.muted = true;
+        video.loop = true;
+        video.playsInline = true;
+        video.autoplay = true;
+        video.preload = 'auto';
+        video.dataset.post = String(n);
+
+        if (kind === 'static') {
+          const box = document.createElement('div');
+          box.className = 'static-box';
+          box.append(video);
+          article.append(box);
+          return article;
+        }
+
+        const media = document.createElement('div');
+        media.className = kind === 'reel' ? 'media reel' : 'media';
+        const wrap = document.createElement('div');
+        wrap.className = 'wrap';
+        const wrap2 = document.createElement('div');
+        wrap2.className = 'wrap2';
+        wrap2.append(video);
+        wrap.append(wrap2);
+
+        const overlay = document.createElement('div');
+        overlay.className = 'ig-overlay';
+        overlay.addEventListener('click', () => {
+          log(`IG overlay click → toggle play (post ${n})`);
+          video.paused ? video.play() : video.pause();
+        });
+        overlay.addEventListener('dblclick', () => log(`IG overlay dblclick → like (post ${n})`));
+
+        const mute = document.createElement('button');
+        mute.className = 'ig-mute';
+        mute.textContent = '🔇';
+        mute.addEventListener('click', () => {
+          video.muted = !video.muted;
+          log(`IG mute button (post ${n}) muted=${video.muted}`);
+        });
+
+        media.append(wrap, overlay, mute);
+        if (kind === 'reel') {
+          const caption = document.createElement('div');
+          caption.className = 'ig-caption';
+          caption.textContent = '@someone · original audio';
+          media.append(caption);
+        }
+        article.append(media);
+        return article;
+      }
+
+      // React-style delegated handlers at the app root.
+      const app = document.getElementById('app');
+      for (const type of ['click', 'pointerdown', 'mousedown', 'dblclick']) {
+        app.addEventListener(type, (e) => {
+          if (e.target.closest?.('.media, .static-box')) log(`IG root ${type} (target ${e.target.tagName.toLowerCase()})`);
+        });
+      }
+      document.addEventListener('keydown', (e) => {
+        if (e.key.startsWith('Arrow')) log(`IG document keydown ${e.key}`);
+      });
+
+      feed.append(makePost('reel'), makePost('feed'), makePost('static'));
+      document.getElementById('add').addEventListener('click', () => feed.append(makePost('feed')));
+      document.getElementById('remove').addEventListener('click', () => feed.firstElementChild?.remove());
+      document.getElementById('clearLog').addEventListener('click', () => {
+        logEl.textContent = '';
+        window.igEvents = [];
+      });
+    </script>
+
+    <script src="chrome-shim.js"></script>
+    <script>
+      // Settings checkboxes write through the shim, like the popup does.
+      (async () => {
+        const current = await chrome.storage.sync.get(null);
+        for (const box of document.querySelectorAll('[data-setting]')) {
+          const key = box.dataset.setting;
+          box.checked = current[key] ?? true;
+          box.addEventListener('change', () => chrome.storage.sync.set({ [key]: box.checked }));
+        }
+      })();
+    </script>
+    <script src="../src/shared/settings.js"></script>
+    <script src="../src/content/seekbar.js"></script>
+    <script src="../src/content/content.js"></script>
+  </body>
+</html>

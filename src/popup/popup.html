@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReelSeek</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <img src="../../icons/icon-32.png" width="24" height="24" alt="" />
+      <h1>ReelSeek</h1>
+    </header>
+
+    <main>
+      <label class="row">
+        <span>
+          <strong>Seek bar</strong>
+          <small>Show the bar on Instagram videos</small>
+        </span>
+        <input type="checkbox" id="enabled" class="switch" />
+      </label>
+
+      <fieldset id="options">
+        <label class="row">
+          <span>
+            <strong>Keyboard shortcuts</strong>
+            <small>Arrow keys and J / L skip</small>
+          </span>
+          <input type="checkbox" id="keyboard" class="switch" />
+        </label>
+
+        <label class="row">
+          <span>
+            <strong>Arrow key skip</strong>
+          </span>
+          <select id="skipSeconds">
+            <option value="5">5 seconds</option>
+            <option value="10">10 seconds</option>
+            <option value="15">15 seconds</option>
+          </select>
+        </label>
+
+        <label class="row">
+          <span>
+            <strong>Speed controls</strong>
+            <small>Speed button and &lt; / &gt; keys</small>
+          </span>
+          <input type="checkbox" id="showSpeed" class="switch" />
+        </label>
+
+        <label class="row">
+          <span>
+            <strong>Remember speed</strong>
+            <small>Keep your speed for the next video</small>
+          </span>
+          <input type="checkbox" id="rememberSpeed" class="switch" />
+        </label>
+      </fieldset>
+
+      <details>
+        <summary>Shortcuts</summary>
+        <dl>
+          <dt><kbd>←</kbd> <kbd>→</kbd></dt>
+          <dd>Back / forward (<span id="skipLabel">5</span>s)</dd>
+          <dt><kbd>J</kbd> <kbd>L</kbd></dt>
+          <dd>Back / forward 10s</dd>
+          <dt><kbd>&lt;</kbd> <kbd>&gt;</kbd></dt>
+          <dd>Slower / faster</dd>
+        </dl>
+      </details>
+    </main>
+
+    <footer>
+      <span id="version"></span> · Not affiliated with Meta or Instagram.
+    </footer>
+
+    <script src="../shared/settings.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

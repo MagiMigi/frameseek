@@ -1,0 +1,13 @@
+{
+  "name": "reelseek",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser extension that adds a YouTube-style seek bar to Instagram videos and Reels.",
+  "type": "module",
+  "scripts": {
+    "icons": "node scripts/make-icons.mjs",
+    "package": "node scripts/package.mjs",
+    "serve": "node scripts/serve.mjs",
+    "lint": "npx --yes web-ext@8 lint --source-dir . --ignore-files \"test/**\" \"scripts/**\" \"store/**\" \"dist/**\" \"package.json\" \"*.md\""
+  }
+}

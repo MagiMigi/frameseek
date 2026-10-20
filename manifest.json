@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "ReelSeek: Video Seek Bar & Speed",
+  "short_name": "ReelSeek",
+  "version": "1.0.0",
+  "description": "Adds a YouTube-style seek bar, skip shortcuts and playback speed to Instagram videos and Reels. Not affiliated with Meta.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "ReelSeek settings",
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.instagram.com/*"],
+      "js": ["src/shared/settings.js", "src/content/seekbar.js", "src/content/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{d5d05a81-853a-4a68-845f-1009aeabf2ef}",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    }
+  }
+}
