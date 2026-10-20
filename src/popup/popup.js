@@ -4,7 +4,7 @@
   const { getSettings, setSettings, onSettingsChanged, SKIP_CHOICES } = globalThis.FrameSeekSettings;
   const api = globalThis.browser ?? globalThis.chrome;
 
-  const TOGGLES = ['enabled', 'keyboard', 'showSpeed', 'rememberSpeed'];
+  const TOGGLES = ['enabled', 'keyboard', 'showSpeed', 'rememberSpeed', 'showLoop'];
   const $ = (id) => document.getElementById(id);
 
   for (const s of SKIP_CHOICES) {
@@ -16,6 +16,8 @@
     $('skipSeconds').value = String(s.skipSeconds);
     $('skipLabel').textContent = String(s.skipSeconds);
     $('options').disabled = !s.enabled;
+    $('rememberSpeed').disabled = !s.showSpeed; // nothing to remember without speed controls
+    for (const el of document.querySelectorAll('[data-requires]')) el.hidden = !s[el.dataset.requires];
   }
 
   for (const key of TOGGLES) {

@@ -40,7 +40,7 @@ FEATURES
 • Frame-by-frame stepping with , and . (like YouTube)
 • Loop any section: mark a start and an end with the A-B button or [ and ], great for learning dance moves, songs and tutorials
 • Playback speed from 0.25× to 2×, optionally remembered for the next video
-• Settings popup to turn each feature on or off
+• Settings popup to turn each feature on or off (speed controls and looping start off)
 
 PRIVACY
 FrameSeek collects no data, makes no network requests and runs only on instagram.com. It only adds controls to the page in your own browser. It never downloads videos or acts on your account.

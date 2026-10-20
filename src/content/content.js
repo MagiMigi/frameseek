@@ -135,6 +135,7 @@
     const action = shortcutFor(e);
     if (!action) return;
     if ((e.key === '<' || e.key === '>') && !settings.showSpeed) return;
+    if ((e.key === '[' || e.key === ']' || e.key === '\\') && !settings.showLoop) return;
     // In stories, ← / → are Instagram's previous / next story; J / L still skip.
     if (isStoriesPage() && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
     const bar = activeBar();

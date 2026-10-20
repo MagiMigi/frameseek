@@ -138,6 +138,7 @@
         <label><input type="checkbox" data-setting="keyboard" /> keyboard</label>
         <label><input type="checkbox" data-setting="showSpeed" /> speed</label>
         <label><input type="checkbox" data-setting="rememberSpeed" /> remember speed</label>
+        <label><input type="checkbox" data-setting="showLoop" /> loop</label>
       </div>
       <textarea id="comment" rows="2" placeholder="Type here: arrow keys must move the caret, not seek"></textarea>
       <div id="feed"></div>
@@ -254,19 +255,19 @@
     </script>
 
     <script src="chrome-shim.js"></script>
+    <script src="../src/shared/settings.js"></script>
+    <script src="../src/content/seekbar.js"></script>
+    <script src="../src/content/content.js"></script>
     <script>
       // Settings checkboxes write through the shim, like the popup does.
       (async () => {
-        const current = await chrome.storage.sync.get(null);
+        const current = await FrameSeekSettings.getSettings();
         for (const box of document.querySelectorAll('[data-setting]')) {
           const key = box.dataset.setting;
-          box.checked = current[key] ?? true;
+          box.checked = current[key];
           box.addEventListener('change', () => chrome.storage.sync.set({ [key]: box.checked }));
         }
       })();
     </script>
-    <script src="../src/shared/settings.js"></script>
-    <script src="../src/content/seekbar.js"></script>
-    <script src="../src/content/content.js"></script>
   </body>
 </html>

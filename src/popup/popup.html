@@ -52,6 +52,14 @@
           </span>
           <input type="checkbox" id="rememberSpeed" class="switch" />
         </label>
+
+        <label class="row">
+          <span>
+            <strong>Loop</strong>
+            <small>A-B button and [ / ] keys to repeat a part</small>
+          </span>
+          <input type="checkbox" id="showLoop" class="switch" />
+        </label>
       </fieldset>
 
       <details>
@@ -63,12 +71,12 @@
           <dd>Back / forward 10s</dd>
           <dt><kbd>,</kbd> <kbd>.</kbd></dt>
           <dd>Previous / next frame (pauses)</dd>
-          <dt><kbd>&lt;</kbd> <kbd>&gt;</kbd></dt>
-          <dd>Slower / faster</dd>
-          <dt><kbd>[</kbd> <kbd>]</kbd></dt>
-          <dd>Loop start / end (or the A-B button); drag the yellow edges to adjust</dd>
-          <dt><kbd>\</kbd></dt>
-          <dd>Stop looping</dd>
+          <dt data-requires="showSpeed"><kbd>&lt;</kbd> <kbd>&gt;</kbd></dt>
+          <dd data-requires="showSpeed">Slower / faster</dd>
+          <dt data-requires="showLoop"><kbd>[</kbd> <kbd>]</kbd></dt>
+          <dd data-requires="showLoop">Loop start / end (or the A-B button); drag the yellow edges to adjust</dd>
+          <dt data-requires="showLoop"><kbd>\</kbd></dt>
+          <dd data-requires="showLoop">Stop looping</dd>
         </dl>
       </details>
     </main>

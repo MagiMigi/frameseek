@@ -57,8 +57,18 @@ fieldset {
   min-width: 0;
 }
 
-fieldset:disabled {
+fieldset:disabled,
+fieldset:not(:disabled) .row:has(input:disabled) {
   opacity: 0.45;
+}
+
+.row:has(input:disabled),
+.row input:disabled {
+  cursor: default;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 .row {

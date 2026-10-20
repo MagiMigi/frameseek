@@ -353,7 +353,6 @@
         part.textContent = text;
         this.repeatBtn.append(part);
       }
-      this.repeatBtn.hidden = this.story;
       this.controls.append(this.timeEl, this.speedBtn, this.repeatBtn);
 
       this.tip = h('div', 'tip', { 'aria-hidden': 'true' });
@@ -459,8 +458,21 @@
     updateSettings(settings) {
       this.settings = settings;
       this.speedBtn.hidden = !settings.showSpeed;
-      if (settings.rememberSpeed && Math.abs(settings.speed - this.video.playbackRate) > 0.001) {
+      this.repeatBtn.hidden = this.story || !settings.showLoop;
+      if (!settings.showSpeed) {
+        // No speed control on screen, so don't leave a video playing at a changed speed.
+        if (this.desiredRate !== null) {
+          this.desiredRate = null;
+          this.video.defaultPlaybackRate = 1;
+          this.video.playbackRate = 1;
+          this.renderSpeed();
+        }
+      } else if (settings.rememberSpeed && Math.abs(settings.speed - this.video.playbackRate) > 0.001) {
         this.setSpeed(settings.speed);
+      }
+      if (!settings.showLoop && this.repeat) {
+        this.repeat = null;
+        this.render();
       }
     }
 
@@ -660,7 +672,7 @@
     // Set with the A-B button or the [ and ] keys. Not offered on stories, where a loop
     // would keep the story from ever moving on.
     setRepeatStart() {
-      if (this.story || !this.duration) return false;
+      if (this.story || !this.settings.showLoop || !this.duration) return false;
       const t = this.pendingSeek ?? this.video.currentTime;
       this.repeat = { start: clamp(t, 0, Math.max(0, this.maxTime - MIN_REPEAT)), end: null };
       this.flash(`Loop from ${formatTime(this.repeat.start)}`);
@@ -671,7 +683,7 @@
     // Without a start, the loop starts at the beginning. Setting the end before the start
     // swaps them.
     setRepeatEnd() {
-      if (this.story || !this.duration) return false;
+      if (this.story || !this.settings.showLoop || !this.duration) return false;
       let start = this.repeat ? this.repeat.start : 0;
       let end = Math.min(this.pendingSeek ?? this.video.currentTime, this.maxTime);
       if (end < start) [start, end] = [end, start];
