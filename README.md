@@ -1,4 +1,4 @@
-# ReelSeek
+# FrameSeek
 
 A browser extension that adds a YouTube-style seek bar to videos and Reels on instagram.com, plus skip shortcuts and playback speed.
 
@@ -40,7 +40,7 @@ After editing code, click the reload icon on the extension card, then reload the
 
 1. Open `about:debugging#/runtime/this-firefox`.
 2. Click **Load Temporary Add-on…** and pick `manifest.json`.
-3. Open https://www.instagram.com/reels/. If the bar doesn't appear, click the extensions (puzzle) button, then ReelSeek, and allow it on instagram.com.
+3. Open https://www.instagram.com/reels/. If the bar doesn't appear, click the extensions (puzzle) button, then FrameSeek, and allow it on instagram.com.
 
 ## Project layout
 
@@ -71,7 +71,7 @@ Instagram's class names are random and change often, so the extension only looks
 
 ```bash
 npm run icons     # regenerate icons/*.png
-npm run package   # build dist/reelseek-<version>.zip for the stores
+npm run package   # build dist/frameseek-<version>.zip for the stores
 npm run serve     # http://localhost:5173/test/harness.html
 npm run lint      # Mozilla's web-ext linter
 ```

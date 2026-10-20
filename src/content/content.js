@@ -4,8 +4,8 @@
 (() => {
   'use strict';
 
-  const { getSettings, setSettings, onSettingsChanged, DEFAULTS } = globalThis.ReelSeekSettings;
-  const { SeekBar } = globalThis.ReelSeek;
+  const { getSettings, setSettings, onSettingsChanged, DEFAULTS } = globalThis.FrameSeekSettings;
+  const { SeekBar } = globalThis.FrameSeek;
 
   const MIN_WIDTH = 200; // skip hover previews and thumbnails
   const MIN_HEIGHT = 150;

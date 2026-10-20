@@ -1,10 +1,10 @@
 // Seek bar controller: one instance per <video>. The UI lives in a Shadow DOM so
 // Instagram's CSS can't reach it and ours can't leak out.
-// Loaded as a classic content script; exposes globalThis.ReelSeek.SeekBar.
+// Loaded as a classic content script; exposes globalThis.FrameSeek.SeekBar.
 (() => {
   'use strict';
 
-  const { SPEEDS } = globalThis.ReelSeekSettings;
+  const { SPEEDS } = globalThis.FrameSeekSettings;
   const CLICK_SPEEDS = [0.5, 1, 1.25, 1.5, 2];
   const ZONE_PX = 72; // bottom strip of the video that reveals the time/speed controls
   const ZONE_MARGIN = 16; // how far the strip reaches above the pills when they're lifted
@@ -275,7 +275,7 @@
 
     build() {
       this.host = document.createElement('div');
-      this.host.setAttribute('data-reelseek', '');
+      this.host.setAttribute('data-frameseek', '');
       this.host.style.cssText =
         'all: initial !important; position: absolute !important; inset: 0 !important; display: block !important;' +
         'z-index: 2147483000 !important; pointer-events: none !important;';
@@ -822,5 +822,5 @@
     };
   }
 
-  globalThis.ReelSeek = Object.freeze({ SeekBar, formatTime });
+  globalThis.FrameSeek = Object.freeze({ SeekBar, formatTime });
 })();

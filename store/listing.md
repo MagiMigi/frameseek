@@ -6,11 +6,11 @@ Everything to paste into the Chrome Web Store, Microsoft Edge Add-ons and Firefo
 npm run package
 ```
 
-That builds `dist/reelseek-<version>.zip`. Every new upload needs a higher `version` in `manifest.json`.
+That builds `dist/frameseek-<version>.zip`. Every new upload needs a higher `version` in `manifest.json`.
 
 ## Before you submit
 
-- [ ] **Check the name is free.** Search each store for "ReelSeek". If it's taken, change `name` / `short_name` in `manifest.json`, the popup title and these texts.
+- [ ] **Check the name is free.** Search each store for "FrameSeek". If it's taken, change `name` / `short_name` in `manifest.json`, the popup title and these texts.
 - [ ] **Host the privacy policy.** Put [PRIVACY.md](../PRIVACY.md) at a public URL. The easiest way is a public GitHub repository: link to the file, or turn on GitHub Pages.
 - [ ] **Pick a license** (for example MIT) if you want the code to be open source. Firefox Add-ons asks for one.
 - [ ] **Take screenshots** of Instagram with the bar visible (see the Images section).
@@ -20,7 +20,7 @@ That builds `dist/reelseek-<version>.zip`. Every new upload needs a higher `vers
 
 **Name**
 ```
-ReelSeek: Video Seek Bar & Speed
+FrameSeek: Video Seek Bar & Speed
 ```
 
 **Summary / short description** (Chrome limit: 132 characters)
@@ -30,7 +30,7 @@ Adds a YouTube-style seek bar, skip shortcuts and playback speed to Instagram vi
 
 **Description**
 ```
-Instagram on the web doesn't let you scrub through Reels. ReelSeek adds the seek bar you know from YouTube.
+Instagram on the web doesn't let you scrub through Reels. FrameSeek adds the seek bar you know from YouTube.
 
 FEATURES
 • Seek bar on every video on instagram.com: Reels, reel pages, feed posts, the post popup and stories
@@ -42,7 +42,7 @@ FEATURES
 • Settings popup to turn each feature on or off
 
 PRIVACY
-ReelSeek collects no data, makes no network requests and runs only on instagram.com. It only adds controls to the page in your own browser. It never downloads videos or acts on your account.
+FrameSeek collects no data, makes no network requests and runs only on instagram.com. It only adds controls to the page in your own browser. It never downloads videos or acts on your account.
 
 Not affiliated with, endorsed by, or sponsored by Meta or Instagram. Instagram is a trademark of Meta Platforms, Inc.
 ```

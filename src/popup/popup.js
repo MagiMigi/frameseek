@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const { getSettings, setSettings, onSettingsChanged, SKIP_CHOICES } = globalThis.ReelSeekSettings;
+  const { getSettings, setSettings, onSettingsChanged, SKIP_CHOICES } = globalThis.FrameSeekSettings;
   const api = globalThis.browser ?? globalThis.chrome;
 
   const TOGGLES = ['enabled', 'keyboard', 'showSpeed', 'rememberSpeed'];

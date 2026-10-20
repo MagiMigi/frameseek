@@ -3,7 +3,7 @@
 (() => {
   'use strict';
 
-  const KEY = 'reelseek-shim-storage';
+  const KEY = 'frameseek-shim-storage';
   const listeners = new Set();
 
   const read = () => {

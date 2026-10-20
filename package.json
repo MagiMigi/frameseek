@@ -1,6 +1,6 @@
 {
-  "name": "reelseek",
-  "version": "1.1.0",
+  "name": "frameseek",
+  "version": "1.1.1",
   "private": true,
   "description": "Browser extension that adds a YouTube-style seek bar to Instagram videos and Reels.",
   "type": "module",

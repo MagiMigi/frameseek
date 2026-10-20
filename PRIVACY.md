@@ -1,12 +1,12 @@
-# ReelSeek Privacy Policy
+# FrameSeek Privacy Policy
 
 _Last updated: October 20, 2026_
 
-ReelSeek is a browser extension that adds a seek bar, skip shortcuts and playback speed controls to videos on instagram.com.
+FrameSeek is a browser extension that adds a seek bar, skip shortcuts and playback speed controls to videos on instagram.com.
 
 ## What we collect
 
-**Nothing.** ReelSeek does not collect, store, transmit, sell or share any personal or usage data.
+**Nothing.** FrameSeek does not collect, store, transmit, sell or share any personal or usage data.
 
 - No analytics, tracking, telemetry or advertising.
 - No network requests of any kind. The extension contains no code that talks to a server.
@@ -14,7 +14,7 @@ ReelSeek is a browser extension that adds a seek bar, skip shortcuts and playbac
 
 ## What is stored on your device
 
-ReelSeek saves only its own settings, using your browser's extension storage:
+FrameSeek saves only its own settings, using your browser's extension storage:
 - whether it is on
 - whether keyboard shortcuts and the speed controls are on
 - your skip length
@@ -35,4 +35,4 @@ If this policy ever changes, the new version will be published at this same addr
 
 Questions: open an issue on the project's repository, or email the address listed on the store page.
 
-ReelSeek is not affiliated with, endorsed by, or sponsored by Meta Platforms, Inc. or Instagram.
+FrameSeek is not affiliated with, endorsed by, or sponsored by Meta Platforms, Inc. or Instagram.

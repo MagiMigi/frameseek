@@ -1,4 +1,4 @@
-// Builds dist/reelseek-<version>.zip with only the files the extension needs
+// Builds dist/frameseek-<version>.zip with only the files the extension needs
 // (manifest.json, src/, icons/). The same zip is uploaded to the Chrome, Edge and
 // Firefox stores. No dependencies: a minimal ZIP writer using Node's built-in zlib.
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -84,7 +84,7 @@ const files = INCLUDE.flatMap((p) => walk(join(ROOT, p))).map((abs) => ({
 
 const outDir = join(ROOT, 'dist');
 mkdirSync(outDir, { recursive: true });
-const out = join(outDir, `reelseek-${version}.zip`);
+const out = join(outDir, `frameseek-${version}.zip`);
 writeFileSync(out, buildZip(files));
 
 console.log(`wrote ${out}`);

@@ -1,5 +1,5 @@
 // Shared settings store, used by the content scripts and the popup.
-// Loaded as a classic script, so it exposes a single global: ReelSeekSettings.
+// Loaded as a classic script, so it exposes a single global: FrameSeekSettings.
 (() => {
   'use strict';
 
@@ -54,7 +54,7 @@
     return () => api.storage.onChanged.removeListener(listener);
   }
 
-  globalThis.ReelSeekSettings = Object.freeze({
+  globalThis.FrameSeekSettings = Object.freeze({
     DEFAULTS,
     SPEEDS,
     SKIP_CHOICES,
