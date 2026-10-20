@@ -101,7 +101,7 @@ Not affiliated with, endorsed by, or sponsored by Meta or Instagram. Instagram i
 | --- | --- | --- |
 | Store icon | 128×128 | `icons/icon-128.png` |
 | Screenshots | 1280×800 (or 640×400) | 1–5 images. A Reel with the bar hovered (time tooltip and speed pill showing), the speed flash after pressing `>`, and the settings popup. |
-| Small promo tile (Chrome) | 440×280 | Icon + "Seek bar for Reels" on a dark background |
+| Small promo tile (Chrome) | 440×280 | `store/promo-440x280.png` |
 | Marquee (Chrome, optional) | 1400×560 | Only needed to be featured |
 
 Blur or crop other people's faces and usernames in screenshots, or use your own content.
