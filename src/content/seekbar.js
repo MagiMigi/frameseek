@@ -7,6 +7,7 @@
   const { SPEEDS } = globalThis.ReelSeekSettings;
   const CLICK_SPEEDS = [0.5, 1, 1.25, 1.5, 2];
   const ZONE_PX = 72; // bottom strip of the video that reveals the time/speed controls
+  const ZONE_MARGIN = 16; // how far the strip reaches above the pills when they're lifted
   const END_MARGIN = 0.1; // never seek exactly onto the end, it would loop or stop the video
   const SIZE_TOLERANCE = 4;
   const SEEK_SETTLE_MS = 250;
@@ -21,7 +22,6 @@
   const OBSTACLE_SELECTOR =
     'button, a[href], [role="button"], [role="link"], [role="slider"], svg, input, textarea, [contenteditable="true"]';
   const OBSTACLE_MAX_HEIGHT = 120; // taller ones are overlays covering the video, not buttons
-  const OBSTACLE_BAND_PX = 64; // how far up from the bottom edge to look
   const OBSTACLE_GAP = 6;
   const OVERLAP_TOLERANCE = 4; // touching edges are fine, e.g. pills tucked under a caption row
   const MIN_HIT_STRIP = 10; // bottom strip of the click area that stays seekable everywhere
@@ -251,6 +251,7 @@
       this.seekFrame = 0;
       this.flashTimer = 0;
       this.zoneTimer = 0;
+      this.zoneHeight = ZONE_PX; // grows when the pills have to sit higher up
       this.desiredRate = null;
       this.rateFixes = 0;
       this.lastText = '';
@@ -701,7 +702,7 @@
     onZoneMove = (e) => {
       if (e.pointerType === 'touch') return;
       const r = this.root.getBoundingClientRect();
-      const inZone = e.clientY >= r.bottom - ZONE_PX && e.clientY <= r.bottom;
+      const inZone = e.clientY >= r.bottom - this.zoneHeight && e.clientY <= r.bottom;
       if (inZone && !this.root.classList.contains('zone')) this.avoidObstacles();
       this.root.classList.toggle('zone', inZone);
     };
@@ -710,7 +711,7 @@
     onZoneDown = (e) => {
       if (e.pointerType !== 'touch') return;
       const r = this.root.getBoundingClientRect();
-      if (e.clientY < r.bottom - ZONE_PX) return;
+      if (e.clientY < r.bottom - this.zoneHeight) return;
       this.avoidObstacles();
       this.root.classList.add('zone');
       clearTimeout(this.zoneTimer);
@@ -733,7 +734,8 @@
         const r = el.getBoundingClientRect();
         // Wide is fine (a story's reply box spans most of the width); tall means an overlay.
         if (r.width < 4 || r.height < 4 || r.height > Math.min(rr.height * 0.4, OBSTACLE_MAX_HEIGHT)) continue;
-        if (r.right <= rr.left || r.left >= rr.right || r.top >= rr.bottom || r.bottom <= rr.bottom - OBSTACLE_BAND_PX) continue;
+        // Only the bottom half matters: the pills never go higher than that.
+        if (r.right <= rr.left || r.left >= rr.right || r.top >= rr.bottom || r.bottom <= rr.bottom - rr.height / 2) continue;
         if (el.checkVisibility && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
         // Distances from the video's left and bottom edges.
         obstacles.push({ x0: r.left - rr.left, x1: r.right - rr.left, b0: rr.bottom - r.bottom, b1: rr.bottom - r.top });
@@ -793,13 +795,26 @@
         if (!hits.length) break;
         left = Math.max(...hits.map((o) => o.x1)) + OBSTACLE_GAP;
       }
+      let bottom = defBottom;
       if (left + w <= width - defLeft && !blocking(left, defBottom).length) {
         if (left !== defLeft) c.style.left = `${left}px`;
-        return;
+      } else {
+        // Keep lifting until nothing is in the way: above a reply box there may be a
+        // link sticker, and so on.
+        let lifted = defBottom;
+        for (let i = 0; i < 8; i++) {
+          const hits = blocking(defLeft, lifted);
+          if (!hits.length) break;
+          lifted = Math.max(...hits.map((o) => o.b1)) + OBSTACLE_GAP;
+        }
+        if (lifted + h <= height / 2 && !blocking(defLeft, lifted).length) {
+          bottom = lifted;
+          c.style.bottom = `${bottom}px`;
+        }
       }
-      const below = obstacles.filter((o) => defLeft < o.x1 - t && defLeft + w > o.x0 + t);
-      const bottom = Math.max(defBottom, ...below.map((o) => o.b1 + OBSTACLE_GAP));
-      if (bottom + h <= height / 2) c.style.bottom = `${bottom}px`;
+      // The pills only show while the pointer is near the bottom. Reach up past them, or
+      // they'd vanish as the pointer moves towards lifted pills.
+      this.zoneHeight = Math.max(ZONE_PX, bottom + h + ZONE_MARGIN);
     }
 
     onZoneLeave = (e) => {

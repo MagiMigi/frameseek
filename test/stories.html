@@ -93,6 +93,21 @@
       .nav > div {
         flex: 1;
       }
+      /* Link sticker above the reply box, like "Watch the full episode". */
+      .sticker {
+        position: absolute;
+        left: 30px;
+        right: 40px;
+        bottom: 72px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.85);
+        color: #111;
+        text-decoration: none;
+      }
       .reply {
         position: absolute;
         left: 16px;
@@ -151,6 +166,7 @@
           <div data-dir="prev"></div>
           <div data-dir="next"></div>
         </div>
+        <a class="sticker" id="sticker" href="#">🔗 Watch the full episode</a>
         <div class="reply">
           <input id="replyInput" placeholder="Reply to testuser..." />
           <button aria-label="Like" id="like">♡</button>
@@ -200,6 +216,10 @@
       nav.addEventListener('pointerup', () => story.play());
       nav.addEventListener('click', (e) => log(`IG ${e.target.dataset.dir} story`));
       document.getElementById('like').addEventListener('click', () => log('IG like'));
+      document.getElementById('sticker').addEventListener('click', (e) => {
+        e.preventDefault();
+        log('IG link sticker');
+      });
       document.getElementById('share').addEventListener('click', () => log('IG share'));
       document.addEventListener('keydown', (e) => {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') log(`IG story keyboard ${e.key}`);
