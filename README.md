@@ -98,3 +98,7 @@ See [store/listing.md](store/listing.md) for the step-by-step for each store and
 
 - The extension only changes how the page looks in your own browser. It never downloads videos, collects data, makes network requests or automates any action.
 - It doesn't use Instagram's name or logo as its own name or branding. It refers to Instagram only to describe what it works with.
+
+## License
+
+[MIT](LICENSE)

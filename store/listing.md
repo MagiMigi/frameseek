@@ -11,8 +11,8 @@ That builds `dist/frameseek-<version>.zip`. Every new upload needs a higher `ver
 ## Before you submit
 
 - [ ] **Check the name is free.** Search each store for "FrameSeek". If it's taken, change `name` / `short_name` in `manifest.json`, the popup title and these texts.
-- [ ] **Host the privacy policy.** Put [PRIVACY.md](../PRIVACY.md) at a public URL. The easiest way is a public GitHub repository: link to the file, or turn on GitHub Pages.
-- [ ] **Pick a license** (for example MIT) if you want the code to be open source. Firefox Add-ons asks for one.
+- [x] **Host the privacy policy.** It is public at https://github.com/MagiMigi/frameseek/blob/main/PRIVACY.md
+- [x] **License:** MIT (see [LICENSE](../LICENSE)). Choose "MIT License" where a store asks.
 - [ ] **Take screenshots** of Instagram with the bar visible (see the Images section).
 - [ ] **Branding rules.** Don't put "Instagram", "Insta", "Gram" or the Instagram logo in the name, icon or screenshots' captions as if it were yours. Mention Instagram only to describe what it works with.
 
@@ -57,10 +57,12 @@ Not affiliated with, endorsed by, or sponsored by Meta or Instagram. Instagram i
    - **Category:** Make Chrome Yours → Functionality & UI (or Lifestyle → Social Networking).
    - **Language:** English.
    - Upload images (see the Images section).
+   - **Homepage URL:** `https://github.com/MagiMigi/frameseek`
+   - **Support URL:** `https://github.com/MagiMigi/frameseek/issues`
 4. **Privacy** tab:
    - **Single purpose:**
      ```
-     Adds playback controls (a seek bar, skip shortcuts and playback speed) to videos on instagram.com.
+     Adds playback controls to videos on instagram.com: a seek bar, frame-by-frame stepping, skip shortcuts, playback speed and section looping.
      ```
    - **Permission justification for `storage`:**
      ```
@@ -68,13 +70,19 @@ Not affiliated with, endorsed by, or sponsored by Meta or Instagram. Instagram i
      ```
    - **Host permission justification (`https://www.instagram.com/*`):**
      ```
-     The extension draws its seek bar and speed button on top of the video player on instagram.com. It runs on no other site.
+     FrameSeek draws its seek bar and playback controls on top of the video player on instagram.com. It runs on no other site and sends no data anywhere.
      ```
+     The dashboard warns that host access means a more detailed review. That's expected for any extension that works on a specific site; it only makes the review take longer.
    - **Remote code:** No, I am not using remote code.
    - **Data usage:** tick none of the data types. Tick all three certifications (no selling, no unrelated use, no creditworthiness).
-   - **Privacy policy URL:** the public PRIVACY.md link.
-5. **Distribution:** Public, all regions.
-6. Submit for review. It usually takes a few days. Access to a single host keeps the review simpler than "all sites" would.
+   - **Privacy policy URL:** `https://github.com/MagiMigi/frameseek/blob/main/PRIVACY.md`
+5. **Distribution:** Free, Public, all regions.
+6. **Test instructions** tab: leave the username and password empty (never give reviewers your own Instagram login). Under additional instructions, paste:
+   ```
+   No sign-in needed: open https://www.instagram.com/reels/ (it works signed out). Hover the bottom of a video to show the seek bar, then click or drag it. Keys: left/right arrows skip, J/L skip 10s, comma/period step one frame. Speed controls and Loop are off by default: turn them on in the toolbar popup, then use the speed button or < and >, and the A-B button or [ and ] to loop part of a video. FrameSeek collects no data and makes no network requests.
+   ```
+7. **Account** page: turn on email notifications for "item review completed" and "item published", so you hear when the review is done.
+8. Submit for review. It usually takes a few days, longer with the detailed review.
 
 ## Microsoft Edge Add-ons
 
@@ -92,7 +100,7 @@ Not affiliated with, endorsed by, or sponsored by Meta or Instagram. Instagram i
 2. **Submit a New Add-on**, choose "On this site", and upload the same zip.
 3. Platforms: tick **Firefox** and **Firefox for Android**. On Android it works in Firefox on instagram.com.
 4. **Source code:** answer **No**. The code isn't minified, bundled or transpiled, so reviewers read it as-is.
-5. **Category:** Photos, Music & Videos. Add a license, and the privacy policy (paste the text of PRIVACY.md).
+5. **Category:** Photos, Music & Videos. License: MIT. Privacy policy: paste the text of PRIVACY.md.
 6. The manifest already includes the Firefox add-on ID and `data_collection_permissions: none`. Keep the ID the same in future versions.
 7. Run `npm run lint` first. It uses the same checks as the AMO validator.
 
@@ -101,7 +109,7 @@ Not affiliated with, endorsed by, or sponsored by Meta or Instagram. Instagram i
 | Asset | Size | Notes |
 | --- | --- | --- |
 | Store icon | 128×128 | `icons/icon-128.png` |
-| Screenshots | 1280×800 (or 640×400) | 1–5 images. A Reel with the bar hovered (time tooltip and speed pill showing), the speed flash after pressing `>`, and the settings popup. |
+| Screenshots | 1280×800 (or 640×400) | 1–5 images, 24-bit PNG or JPEG without transparency. Use video-only captures, so other people's names, photos and comments don't show. |
 | Small promo tile (Chrome) | 440×280 | `store/promo-440x280.png` |
 | Marquee (Chrome, optional) | 1400×560 | Only needed to be featured |
 
