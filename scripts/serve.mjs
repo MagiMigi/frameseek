@@ -1,4 +1,6 @@
-// Tiny static file server for the local test harness: http://localhost:5173/test/harness.html
+// Tiny static file server for the local test pages:
+//   http://localhost:5173/test/harness.html     feed and Reels
+//   http://localhost:5173/stories/test/1/       stories viewer (test/stories.html)
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, extname, join, normalize, sep } from 'node:path';
@@ -19,7 +21,10 @@ const TYPES = {
 
 createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  const path = normalize(join(ROOT, decodeURIComponent(url.pathname)));
+  // The extension decides it's in the stories viewer from the URL, so serve the stories
+  // test page under a /stories/ path like Instagram's.
+  const pathname = url.pathname.startsWith('/stories/') ? '/test/stories.html' : decodeURIComponent(url.pathname);
+  const path = normalize(join(ROOT, pathname));
   if (!path.startsWith(ROOT + sep)) {
     res.writeHead(403).end();
     return;

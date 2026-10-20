@@ -18,7 +18,9 @@
 
   // Instagram's own buttons near the bottom of a video (tagged people, mute, caption
   // links) that our controls must not cover.
-  const OBSTACLE_SELECTOR = 'button, a[href], [role="button"], [role="link"], [role="slider"], svg';
+  const OBSTACLE_SELECTOR =
+    'button, a[href], [role="button"], [role="link"], [role="slider"], svg, input, textarea, [contenteditable="true"]';
+  const OBSTACLE_MAX_HEIGHT = 120; // taller ones are overlays covering the video, not buttons
   const OBSTACLE_BAND_PX = 64; // how far up from the bottom edge to look
   const OBSTACLE_GAP = 6;
   const OVERLAP_TOLERANCE = 4; // touching edges are fine, e.g. pills tucked under a caption row
@@ -231,9 +233,12 @@
   }
 
   class SeekBar {
-    constructor(video, settings, hooks = {}) {
+    // options: { onSpeedChange(bar, rate), story: true for a video in the stories viewer }
+    constructor(video, settings, options = {}) {
       this.video = video;
-      this.hooks = hooks;
+      this.options = options;
+      this.story = Boolean(options.story);
+      this.resumeAfterDrag = false;
       this.settings = settings;
       this.mountEl = null;
       this.restorePosition = null;
@@ -579,7 +584,7 @@
     changeSpeed(rate) {
       this.setSpeed(rate);
       this.flash(formatRate(rate));
-      this.hooks.onSpeedChange?.(this, rate);
+      this.options.onSpeedChange?.(this, rate);
     }
 
     cycleSpeed() {
@@ -636,6 +641,12 @@
       e.preventDefault();
       this.dragging = true;
       this.root.classList.add('dragging');
+      // A story moves on by itself when its time is up, so hold it still while dragging
+      // (like Instagram's own press-and-hold) and carry on playing after.
+      if (this.story && !this.video.paused) {
+        this.resumeAfterDrag = true;
+        this.video.pause();
+      }
       try {
         this.hit.setPointerCapture(e.pointerId);
       } catch {
@@ -681,6 +692,10 @@
       this.dragging = false;
       this.root.classList.remove('dragging');
       this.seekNow(t); // exact seek on release
+      if (this.resumeAfterDrag) {
+        this.resumeAfterDrag = false;
+        this.video.play().catch(() => {});
+      }
     }
 
     onZoneMove = (e) => {
@@ -716,7 +731,8 @@
       const obstacles = [];
       for (const el of this.mountEl.querySelectorAll(OBSTACLE_SELECTOR)) {
         const r = el.getBoundingClientRect();
-        if (r.width < 4 || r.height < 4 || r.width > rr.width * 0.4 || r.height > rr.height * 0.4) continue;
+        // Wide is fine (a story's reply box spans most of the width); tall means an overlay.
+        if (r.width < 4 || r.height < 4 || r.height > Math.min(rr.height * 0.4, OBSTACLE_MAX_HEIGHT)) continue;
         if (r.right <= rr.left || r.left >= rr.right || r.top >= rr.bottom || r.bottom <= rr.bottom - OBSTACLE_BAND_PX) continue;
         if (el.checkVisibility && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
         // Distances from the video's left and bottom edges.

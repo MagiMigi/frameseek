@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReelSeek Stories Harness</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        background: #1a1a1a;
+        color: #fff;
+        font: 14px/1.4 system-ui, sans-serif;
+        overflow: hidden;
+      }
+      /* A feed video behind the viewer, like the page you opened stories from. */
+      .behind {
+        position: fixed;
+        left: 16px;
+        top: 16px;
+        width: 400px;
+        height: 500px;
+        opacity: 0.25;
+      }
+      .behind video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .viewer {
+        position: fixed;
+        inset: 0;
+        right: 340px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 40px;
+        background: rgba(26, 26, 26, 0.96);
+      }
+      .preview {
+        position: relative;
+        width: 180px;
+        height: 320px;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .preview video,
+      .card video {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      /* Instagram-like story card: overlays are siblings of the video's wrapper. */
+      .card {
+        position: relative;
+        width: 400px;
+        height: 711px;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #000;
+      }
+      .card .wrap {
+        width: 100%;
+        height: 100%;
+      }
+      .progress {
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        top: 8px;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.35);
+      }
+      .progress > div {
+        height: 100%;
+        width: 0;
+        background: #fff;
+      }
+      .header {
+        position: absolute;
+        left: 16px;
+        top: 20px;
+        font-weight: 600;
+      }
+      .nav {
+        position: absolute;
+        inset: 0;
+        display: flex;
+      }
+      .nav > div {
+        flex: 1;
+      }
+      .reply {
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .reply input {
+        flex: 1;
+        height: 44px;
+        box-sizing: border-box;
+        padding: 0 16px;
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        border-radius: 22px;
+        background: transparent;
+        color: #fff;
+        font: inherit;
+      }
+      .reply button {
+        width: 28px;
+        height: 28px;
+        border: 0;
+        background: none;
+        color: #fff;
+        cursor: pointer;
+      }
+      #log {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 340px;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 12px;
+        overflow: auto;
+        background: #111;
+        color: #8f8;
+        font: 12px/1.5 ui-monospace, Consolas, monospace;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="behind"><video id="behind" muted loop playsinline></video></div>
+
+    <div class="viewer">
+      <div class="preview"><video class="side" muted playsinline></video></div>
+      <div class="card" id="card">
+        <div class="wrap"><video id="story" muted playsinline></video></div>
+        <div class="progress"><div id="progress"></div></div>
+        <div class="header">testuser · 2h</div>
+        <div class="nav" id="nav">
+          <div data-dir="prev"></div>
+          <div data-dir="next"></div>
+        </div>
+        <div class="reply">
+          <input id="replyInput" placeholder="Reply to testuser..." />
+          <button aria-label="Like" id="like">♡</button>
+          <button aria-label="Share" id="share">➤</button>
+        </div>
+      </div>
+      <div class="preview"><video class="side" muted playsinline></video></div>
+    </div>
+    <pre id="log"></pre>
+
+    <script>
+      const SRC = new URLSearchParams(location.search).get('src') ||
+        'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4';
+      const logEl = document.getElementById('log');
+      window.igEvents = [];
+      function log(msg) {
+        window.igEvents.push(msg);
+        logEl.textContent += msg + '\n';
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      const story = document.getElementById('story');
+      const behind = document.getElementById('behind');
+      for (const v of [story, behind, ...document.querySelectorAll('video.side')]) {
+        v.src = SRC;
+        v.preload = 'auto';
+      }
+      story.play().catch(() => {});
+      behind.play().catch(() => {});
+
+      // Instagram-like behaviour: the top bar follows the video, the story moves on when
+      // the video ends, press-and-hold pauses, clicking a side goes to the previous/next story.
+      const progress = document.getElementById('progress');
+      story.addEventListener('timeupdate', () => {
+        progress.style.width = `${(story.currentTime / story.duration) * 100}%`;
+      });
+      story.addEventListener('ended', () => {
+        log('IG story ended → next story');
+        story.currentTime = 0;
+        story.play();
+      });
+      const nav = document.getElementById('nav');
+      nav.addEventListener('pointerdown', () => {
+        log('IG press-and-hold → pause');
+        story.pause();
+      });
+      nav.addEventListener('pointerup', () => story.play());
+      nav.addEventListener('click', (e) => log(`IG ${e.target.dataset.dir} story`));
+      document.getElementById('like').addEventListener('click', () => log('IG like'));
+      document.getElementById('share').addEventListener('click', () => log('IG share'));
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') log(`IG story keyboard ${e.key}`);
+      });
+    </script>
+
+    <script src="/test/chrome-shim.js"></script>
+    <script src="/src/shared/settings.js"></script>
+    <script src="/src/content/seekbar.js"></script>
+    <script src="/src/content/content.js"></script>
+  </body>
+</html>

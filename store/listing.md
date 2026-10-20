@@ -33,7 +33,7 @@ Adds a YouTube-style seek bar, skip shortcuts and playback speed to Instagram vi
 Instagram on the web doesn't let you scrub through Reels. ReelSeek adds the seek bar you know from YouTube.
 
 FEATURES
-• Seek bar on every video on instagram.com: Reels, reel pages, feed posts and the post popup
+• Seek bar on every video on instagram.com: Reels, reel pages, feed posts, the post popup and stories
 • Click or drag to jump anywhere; hover to preview the time
 • Current / total time display
 • Keyboard shortcuts: ← / → skip 5s (adjustable from 1 to 15s), J / L skip 10s, < / > change speed

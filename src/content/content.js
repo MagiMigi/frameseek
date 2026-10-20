@@ -12,13 +12,15 @@
   const RESCAN_MS = 1500; // safety net for videos that grow without a DOM mutation
   const SCAN_THROTTLE_MS = 100; // Instagram mutates the DOM constantly; scan at most this often
   const LONG_SKIP = 10;
+  // The stories viewer shows the previous/next stories as smaller cards beside the main
+  // one; only videos at least this share of the largest video's area get a bar there.
+  const STORY_MAIN_SHARE = 0.5;
 
   const bars = new Map(); // HTMLVideoElement -> SeekBar
   let settings = { ...DEFAULTS };
   let scanQueued = false;
 
-  // Stories have their own progress bar.
-  const isExcludedPage = () => location.pathname.startsWith('/stories/');
+  const isStoriesPage = () => location.pathname.startsWith('/stories/');
 
   // A timer rather than requestAnimationFrame, so scans still run while the page isn't
   // being drawn (e.g. the window is covered).
@@ -36,19 +38,28 @@
         bars.delete(video);
       }
     }
-    if (!settings.enabled || isExcludedPage()) {
+    if (!settings.enabled) {
       destroyAll();
       return;
     }
-    for (const video of document.querySelectorAll('video')) {
-      const bar = bars.get(video);
-      if (bar) {
-        bar.ensureMounted();
-        continue;
-      }
+    const story = isStoriesPage();
+    const videos = [...document.querySelectorAll('video')].map((video) => {
       const r = video.getBoundingClientRect();
-      if (r.width < MIN_WIDTH || r.height < MIN_HEIGHT) continue;
-      bars.set(video, new SeekBar(video, settings, { onSpeedChange }));
+      return { video, area: r.width * r.height, big: r.width >= MIN_WIDTH && r.height >= MIN_HEIGHT };
+    });
+    const minArea = story ? Math.max(0, ...videos.map((v) => v.area)) * STORY_MAIN_SHARE : 0;
+    for (const { video, area, big } of videos) {
+      const bar = bars.get(video);
+      const wanted = big && area >= minArea;
+      if (bar && story && !wanted) {
+        // A story that moved from the middle into a side preview.
+        bar.destroy();
+        bars.delete(video);
+      } else if (bar) {
+        bar.ensureMounted();
+      } else if (wanted) {
+        bars.set(video, new SeekBar(video, settings, { onSpeedChange, story }));
+      }
     }
   }
 
@@ -64,12 +75,14 @@
     setSettings({ speed: rate }).catch(() => {});
   }
 
-  // The video the shortcuts act on: one being stepped frame by frame, else the playing
-  // one with the most area on screen, else the most visible paused one (if at least a
-  // third of it is showing).
+  // The video the shortcuts act on: on a stories page the story, then one being stepped
+  // frame by frame, else the playing one with the most area on screen, else the most
+  // visible paused one (if at least a third of it is showing). The stories viewer covers
+  // the feed, so a feed video behind it must not win.
   function activeBar() {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const story = isStoriesPage();
     let best = null;
     let bestScore = 0;
     for (const bar of bars.values()) {
@@ -81,7 +94,8 @@
       const area = w * h;
       const playing = !bar.video.paused;
       if (!playing && area < (r.width * r.height) / 3) continue;
-      const score = area + (playing ? vw * vh : 0) + (bar.stepping ? 2 * vw * vh : 0);
+      const score =
+        area + (playing ? vw * vh : 0) + (bar.stepping ? 2 * vw * vh : 0) + (story && bar.story ? 4 * vw * vh : 0);
       if (score > bestScore) {
         best = bar;
         bestScore = score;
@@ -116,6 +130,8 @@
     const action = shortcutFor(e);
     if (!action) return;
     if ((e.key === '<' || e.key === '>') && !settings.showSpeed) return;
+    // In stories, ← / → are Instagram's previous / next story; J / L still skip.
+    if (isStoriesPage() && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
     const bar = activeBar();
     if (!bar || !action(bar)) return;
     // Only swallow keys we actually used, so Instagram keeps its own arrow-key navigation
