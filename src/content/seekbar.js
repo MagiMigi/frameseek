@@ -189,8 +189,9 @@
     .repeat-range.on { display: block; }
     .repeat-range.start { width: 0; border-top: 0; border-right: 0; background: none; }
 
-    /* Grips on the loop's edges, for dragging its start and end. They sit above the seek
-       area so they win where the two overlap, and only take clicks while the controls show. */
+    /* Invisible grab areas on the loop's edges, for dragging its start and end. They sit
+       above the seek area so they win where the two overlap, and only take clicks while
+       the controls show. */
     .repeat-handle {
       position: absolute;
       bottom: -2px;
@@ -203,26 +204,10 @@
       touch-action: none;
       pointer-events: none;
     }
-    .repeat-handle::before {
-      content: "";
-      position: absolute;
-      left: 5px;
-      top: 0;
-      width: 6px;
-      height: 12px;
-      border-radius: 3px;
-      background: var(--loop);
-      box-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
-      opacity: 0;
-      transition: opacity 0.12s ease;
-    }
     .repeat-handle.show { display: block; }
     .root.zone .repeat-handle,
     .root.hover-bar .repeat-handle,
     .root.dragging .repeat-handle { pointer-events: auto; }
-    .root.zone .repeat-handle::before,
-    .root.hover-bar .repeat-handle::before,
-    .root.dragging .repeat-handle::before { opacity: 1; }
 
     .flash {
       position: absolute;
