@@ -16,6 +16,14 @@
   const COMMON_FPS = [24, 25, 30, 48, 50, 60];
   const FRAME_SAMPLES = 30;
 
+  // Instagram's own buttons near the bottom of a video (tagged people, mute, caption
+  // links) that our controls must not cover.
+  const OBSTACLE_SELECTOR = 'button, a[href], [role="button"], [role="link"], [role="slider"], svg';
+  const OBSTACLE_BAND_PX = 64; // how far up from the bottom edge to look
+  const OBSTACLE_GAP = 6;
+  const OVERLAP_TOLERANCE = 4; // touching edges are fine, e.g. pills tucked under a caption row
+  const MAX_HIT_CARVE = 0.3; // never shrink the bar's click area by more than this per side
+
   // Events from our controls must not reach Instagram, or a click on the bar would also
   // pause, mute or "double-tap like" the video.
   const SWALLOWED_EVENTS = [
@@ -285,9 +293,10 @@
       this.played = h('div', 'fill played');
       this.knob = h('div', 'knob');
       this.track.append(this.buffered, this.hoverFill, this.played, this.knob);
-      this.hit.append(this.track);
 
-      this.root.append(this.flashEl, this.controls, this.tip, this.hit);
+      // The visible track and the click area are separate, so the click area can be
+      // narrowed around Instagram's buttons while the track still spans the full width.
+      this.root.append(this.flashEl, this.controls, this.tip, this.track, this.hit);
       shadow.append(style, this.root);
     }
 
@@ -677,7 +686,9 @@
     onZoneMove = (e) => {
       if (e.pointerType === 'touch') return;
       const r = this.root.getBoundingClientRect();
-      this.root.classList.toggle('zone', e.clientY >= r.bottom - ZONE_PX && e.clientY <= r.bottom);
+      const inZone = e.clientY >= r.bottom - ZONE_PX && e.clientY <= r.bottom;
+      if (inZone && !this.root.classList.contains('zone')) this.avoidObstacles();
+      this.root.classList.toggle('zone', inZone);
     };
 
     // Touch screens have no hover, so a tap near the bottom shows the controls for a while.
@@ -685,12 +696,80 @@
       if (e.pointerType !== 'touch') return;
       const r = this.root.getBoundingClientRect();
       if (e.clientY < r.bottom - ZONE_PX) return;
+      this.avoidObstacles();
       this.root.classList.add('zone');
       clearTimeout(this.zoneTimer);
       this.zoneTimer = setTimeout(() => {
         if (!this.dragging) this.root.classList.remove('zone');
       }, TOUCH_ZONE_MS);
     };
+
+    // ---- staying clear of Instagram's buttons ------------------------------------
+
+    // Some videos have small Instagram buttons in the bottom corners (tagged people,
+    // mute) or caption links near the bottom. Runs whenever the pointer enters the
+    // bottom of the video, since Instagram can add those buttons at any time.
+    avoidObstacles() {
+      if (!this.mountEl) return;
+      const rr = this.root.getBoundingClientRect();
+      if (!rr.width || !rr.height) return;
+      const obstacles = [];
+      for (const el of this.mountEl.querySelectorAll(OBSTACLE_SELECTOR)) {
+        const r = el.getBoundingClientRect();
+        if (r.width < 4 || r.height < 4 || r.width > rr.width * 0.4 || r.height > rr.height * 0.4) continue;
+        if (r.right <= rr.left || r.left >= rr.right || r.top >= rr.bottom || r.bottom <= rr.bottom - OBSTACLE_BAND_PX) continue;
+        if (el.checkVisibility && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+        // Distances from the video's left and bottom edges.
+        obstacles.push({ x0: r.left - rr.left, x1: r.right - rr.left, b0: rr.bottom - r.bottom, b1: rr.bottom - r.top });
+      }
+      this.carveHit(obstacles, rr.width);
+      this.placeControls(obstacles, rr.width, rr.height);
+    }
+
+    // Leave a gap in the bar's click area wherever a button reaches down into it.
+    carveHit(obstacles, width) {
+      const hitHeight = this.hit.offsetHeight;
+      const max = width * MAX_HIT_CARVE;
+      let left = 0;
+      let right = 0;
+      for (const o of obstacles) {
+        if (o.b0 >= hitHeight) continue;
+        if (o.x0 + o.x1 < width) left = Math.max(left, o.x1 + 2);
+        else right = Math.max(right, width - o.x0 + 2);
+      }
+      this.hit.style.left = `${Math.min(left, max)}px`;
+      this.hit.style.right = `${Math.min(right, max)}px`;
+    }
+
+    // Slide the time/speed pills right past any button in the way; if there's no room on
+    // that row, lift them above the buttons instead.
+    placeControls(obstacles, width, height) {
+      const c = this.controls;
+      c.style.left = '';
+      c.style.bottom = '';
+      const cs = getComputedStyle(c);
+      const defLeft = parseFloat(cs.left) || 0;
+      const defBottom = parseFloat(cs.bottom) || 0;
+      const w = c.offsetWidth;
+      const h = c.offsetHeight;
+      const t = OVERLAP_TOLERANCE;
+      const blocking = (left, bottom) =>
+        obstacles.filter((o) => left < o.x1 - t && left + w > o.x0 + t && bottom < o.b1 - t && bottom + h > o.b0 + t);
+
+      let left = defLeft;
+      for (let i = 0; i < 5; i++) {
+        const hits = blocking(left, defBottom);
+        if (!hits.length) break;
+        left = Math.max(...hits.map((o) => o.x1)) + OBSTACLE_GAP;
+      }
+      if (left + w <= width - defLeft && !blocking(left, defBottom).length) {
+        if (left !== defLeft) c.style.left = `${left}px`;
+        return;
+      }
+      const below = obstacles.filter((o) => defLeft < o.x1 - t && defLeft + w > o.x0 + t);
+      const bottom = Math.max(defBottom, ...below.map((o) => o.b1 + OBSTACLE_GAP));
+      if (bottom + h <= height / 2) c.style.bottom = `${bottom}px`;
+    }
 
     onZoneLeave = (e) => {
       if (e.pointerType !== 'touch' && !this.dragging) this.root.classList.remove('zone');

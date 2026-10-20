@@ -80,6 +80,18 @@
         color: #fff;
         cursor: pointer;
       }
+      .ig-tags {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        cursor: pointer;
+      }
       .ig-caption {
         position: absolute;
         left: 12px;
@@ -204,6 +216,13 @@
         });
 
         media.append(wrap, overlay, mute);
+        if (kind === 'feed') {
+          const tags = document.createElement('button');
+          tags.className = 'ig-tags';
+          tags.textContent = '👤';
+          tags.addEventListener('click', () => log(`IG tagged people button (post ${n})`));
+          media.append(tags);
+        }
         if (kind === 'reel') {
           const caption = document.createElement('div');
           caption.className = 'ig-caption';
