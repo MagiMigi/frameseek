@@ -1,11 +1,15 @@
 (() => {
   'use strict';
 
-  const { getSettings, setSettings, onSettingsChanged } = globalThis.ReelSeekSettings;
+  const { getSettings, setSettings, onSettingsChanged, SKIP_CHOICES } = globalThis.ReelSeekSettings;
   const api = globalThis.browser ?? globalThis.chrome;
 
   const TOGGLES = ['enabled', 'keyboard', 'showSpeed', 'rememberSpeed'];
   const $ = (id) => document.getElementById(id);
+
+  for (const s of SKIP_CHOICES) {
+    $('skipSeconds').append(new Option(`${s} second${s === 1 ? '' : 's'}`, String(s)));
+  }
 
   function render(s) {
     for (const key of TOGGLES) $(key).checked = s[key];

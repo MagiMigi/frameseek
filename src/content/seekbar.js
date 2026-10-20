@@ -12,6 +12,9 @@
   const SEEK_SETTLE_MS = 250;
   const FLASH_MS = 650;
   const TOUCH_ZONE_MS = 3000;
+  const DEFAULT_FRAME = 1 / 30; // most Reels are 30fps; measured per video when possible
+  const COMMON_FPS = [24, 25, 30, 48, 50, 60];
+  const FRAME_SAMPLES = 30;
 
   // Events from our controls must not reach Instagram, or a click on the bar would also
   // pause, mute or "double-tap like" the video.
@@ -189,6 +192,13 @@
 
   const formatRate = (rate) => `${Number(rate.toFixed(2))}×`;
 
+  // 29.97 → 30, 23.976 → 24 and so on; anything unusual is kept as measured.
+  function snapFrame(gap) {
+    const fps = 1 / gap;
+    const near = COMMON_FPS.find((f) => Math.abs(f - fps) / f < 0.04);
+    return 1 / (near ?? fps);
+  }
+
   // Instagram stacks transparent click-catching overlays as siblings of the video's
   // wrapper. Mounting at the highest ancestor with the same box as the video puts our bar
   // above them. Prefer an already-positioned ancestor so we never change Instagram's layout.
@@ -232,6 +242,11 @@
       this.rateFixes = 0;
       this.lastText = '';
       this.destroyed = false;
+      this.stepping = false; // paused by frame stepping; shortcuts keep targeting this video
+      this.frameDuration = DEFAULT_FRAME;
+      this.frameSamples = [];
+      this.lastMediaTime = null;
+      this.frameHandle = 0;
 
       this.build();
       this.mount();
@@ -322,11 +337,12 @@
         ['timeupdate', this.onRender],
         ['durationchange', this.onRender],
         ['progress', this.onRender],
-        ['emptied', this.onRender],
+        ['emptied', this.onEmptied],
         ['seeked', this.onSeeked],
         ['ratechange', this.onRateChange],
       ];
       for (const [type, fn] of this.videoListeners) v.addEventListener(type, fn);
+      this.probeFrames();
 
       this.io = new IntersectionObserver((entries) => {
         this.visible = entries[entries.length - 1].isIntersecting;
@@ -364,6 +380,7 @@
       cancelAnimationFrame(this.seekFrame);
       clearTimeout(this.flashTimer);
       clearTimeout(this.zoneTimer);
+      this.stopFrameProbe();
       this.io.disconnect();
       for (const [type, fn] of this.videoListeners) this.video.removeEventListener(type, fn);
       if (resetSpeed && this.desiredRate !== null) {
@@ -499,6 +516,47 @@
       return true;
     }
 
+    // Frame by frame, like YouTube's , and . keys. Pauses first, since stepping only makes
+    // sense on a still picture. Aims at the middle of the target frame, so rounding can't
+    // leave us on the frame we started from.
+    stepFrame(dir) {
+      if (!this.duration) return false;
+      if (!this.video.paused) this.video.pause();
+      this.stepping = true;
+      const fd = this.frameDuration;
+      const base = this.pendingSeek ?? this.video.currentTime;
+      const frame = Math.floor(base / fd + 1e-3);
+      const target = (frame + dir) * fd + fd / 2;
+      this.seekNow(clamp(target, 0, Math.max(0, this.duration - fd / 2)));
+      this.flash(dir < 0 ? '−1 frame' : '+1 frame');
+      return true;
+    }
+
+    // Browsers don't expose a video's frame rate, so measure it: while playing, the
+    // smallest gap between consecutive frames' media times is one frame.
+    probeFrames() {
+      const v = this.video;
+      if (typeof v.requestVideoFrameCallback !== 'function' || this.frameHandle) return;
+      const onFrame = (_now, meta) => {
+        this.frameHandle = 0;
+        if (this.destroyed) return;
+        const gap = this.lastMediaTime === null ? 0 : meta.mediaTime - this.lastMediaTime;
+        this.lastMediaTime = meta.mediaTime;
+        if (gap > 0.005 && gap < 0.1 && !v.paused && !v.seeking) {
+          this.frameSamples.push(gap);
+          if (this.frameSamples.length >= 5) this.frameDuration = snapFrame(Math.min(...this.frameSamples));
+          if (this.frameSamples.length >= FRAME_SAMPLES) return;
+        }
+        this.frameHandle = v.requestVideoFrameCallback(onFrame);
+      };
+      this.frameHandle = v.requestVideoFrameCallback(onFrame);
+    }
+
+    stopFrameProbe() {
+      if (this.frameHandle) this.video.cancelVideoFrameCallback?.(this.frameHandle);
+      this.frameHandle = 0;
+    }
+
     // ---- speed ---------------------------------------------------------------
 
     setSpeed(rate) {
@@ -533,7 +591,18 @@
 
     onRender = () => this.render();
 
+    // The element got a new source: its frame rate may differ.
+    onEmptied = () => {
+      this.stopFrameProbe();
+      this.frameDuration = DEFAULT_FRAME;
+      this.frameSamples = [];
+      this.lastMediaTime = null;
+      this.probeFrames();
+      this.render();
+    };
+
     onPlay = () => {
+      if (!this.video.paused) this.stepping = false;
       if (this.desiredRate !== null && Math.abs(this.video.playbackRate - this.desiredRate) > 0.001) {
         this.video.playbackRate = this.desiredRate;
       }

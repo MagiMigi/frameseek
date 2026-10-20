@@ -8,7 +8,7 @@
   const area = api.storage.sync ?? api.storage.local;
 
   const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-  const SKIP_CHOICES = [5, 10, 15];
+  const SKIP_CHOICES = [1, 2, 3, 4, 5, 10, 15];
 
   const DEFAULTS = Object.freeze({
     enabled: true,

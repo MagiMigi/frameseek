@@ -25,7 +25,7 @@
         <label class="row">
           <span>
             <strong>Keyboard shortcuts</strong>
-            <small>Arrow keys and J / L skip</small>
+            <small>Skip and frame-by-frame keys</small>
           </span>
           <input type="checkbox" id="keyboard" class="switch" />
         </label>
@@ -34,11 +34,7 @@
           <span>
             <strong>Arrow key skip</strong>
           </span>
-          <select id="skipSeconds">
-            <option value="5">5 seconds</option>
-            <option value="10">10 seconds</option>
-            <option value="15">15 seconds</option>
-          </select>
+          <select id="skipSeconds"></select>
         </label>
 
         <label class="row">
@@ -65,6 +61,8 @@
           <dd>Back / forward (<span id="skipLabel">5</span>s)</dd>
           <dt><kbd>J</kbd> <kbd>L</kbd></dt>
           <dd>Back / forward 10s</dd>
+          <dt><kbd>,</kbd> <kbd>.</kbd></dt>
+          <dd>Previous / next frame (pauses)</dd>
           <dt><kbd>&lt;</kbd> <kbd>&gt;</kbd></dt>
           <dd>Slower / faster</dd>
         </dl>

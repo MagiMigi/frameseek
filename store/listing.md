@@ -36,7 +36,8 @@ FEATURES
 • Seek bar on every video on instagram.com: Reels, reel pages, feed posts and the post popup
 • Click or drag to jump anywhere; hover to preview the time
 • Current / total time display
-• Keyboard shortcuts: ← / → skip 5s (adjustable to 10 or 15s), J / L skip 10s, < / > change speed
+• Keyboard shortcuts: ← / → skip 5s (adjustable from 1 to 15s), J / L skip 10s, < / > change speed
+• Frame-by-frame stepping with , and . (like YouTube)
 • Playback speed from 0.25× to 2×, optionally remembered for the next video
 • Settings popup to turn each feature on or off
 

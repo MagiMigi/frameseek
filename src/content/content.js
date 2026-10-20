@@ -64,8 +64,9 @@
     setSettings({ speed: rate }).catch(() => {});
   }
 
-  // The video the shortcuts act on: the playing one with the most area on screen,
-  // otherwise the most visible paused one (if at least a third of it is showing).
+  // The video the shortcuts act on: one being stepped frame by frame, else the playing
+  // one with the most area on screen, else the most visible paused one (if at least a
+  // third of it is showing).
   function activeBar() {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
@@ -80,7 +81,7 @@
       const area = w * h;
       const playing = !bar.video.paused;
       if (!playing && area < (r.width * r.height) / 3) continue;
-      const score = area + (playing ? vw * vh : 0);
+      const score = area + (playing ? vw * vh : 0) + (bar.stepping ? 2 * vw * vh : 0);
       if (score > bestScore) {
         best = bar;
         bestScore = score;
@@ -101,6 +102,8 @@
       case 'ArrowRight': return (bar) => bar.seekBy(settings.skipSeconds);
       case 'j': case 'J': return (bar) => bar.seekBy(-LONG_SKIP);
       case 'l': case 'L': return (bar) => bar.seekBy(LONG_SKIP);
+      case ',': return (bar) => bar.stepFrame(-1);
+      case '.': return (bar) => bar.stepFrame(1);
       case '<': return (bar) => (bar.stepSpeed(-1), true);
       case '>': return (bar) => (bar.stepSpeed(1), true);
       default: return null;

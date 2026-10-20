@@ -14,11 +14,14 @@ Works in Chrome, Edge and Firefox (desktop and Android) from one codebase. No bu
 
   | Key | Action |
   | --- | --- |
-  | `←` / `→` | Back / forward 5s (5, 10 or 15s, set in popup) |
+  | `←` / `→` | Back / forward 5s (1, 2, 3, 4, 5, 10 or 15s, set in popup) |
   | `J` / `L` | Back / forward 10s |
+  | `,` / `.` | Previous / next frame (pauses the video) |
   | `<` / `>` | Slower / faster |
 
   `↑` / `↓` keep Instagram's next / previous reel. Shortcuts are ignored while you type in comments or messages.
+
+  Frame stepping measures each video's frame rate while it plays (24, 25, 30, 60 fps…) and falls back to 30 fps until it knows. Click the video or press play to continue.
 - **Playback speed**: 0.25× to 2×. Optionally kept for the next video.
 - **Settings popup**: click the toolbar icon.
 
