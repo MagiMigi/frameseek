@@ -22,7 +22,7 @@
   const OBSTACLE_BAND_PX = 64; // how far up from the bottom edge to look
   const OBSTACLE_GAP = 6;
   const OVERLAP_TOLERANCE = 4; // touching edges are fine, e.g. pills tucked under a caption row
-  const MAX_HIT_CARVE = 0.3; // never shrink the bar's click area by more than this per side
+  const MIN_HIT_STRIP = 10; // bottom strip of the click area that stays seekable everywhere
 
   // Events from our controls must not reach Instagram, or a click on the bar would also
   // pause, mute or "double-tap like" the video.
@@ -722,23 +722,38 @@
         // Distances from the video's left and bottom edges.
         obstacles.push({ x0: r.left - rr.left, x1: r.right - rr.left, b0: rr.bottom - r.bottom, b1: rr.bottom - r.top });
       }
-      this.carveHit(obstacles, rr.width);
+      this.notchHit(obstacles, rr.width);
       this.placeControls(obstacles, rr.width, rr.height);
     }
 
-    // Leave a gap in the bar's click area wherever a button reaches down into it.
-    carveHit(obstacles, width) {
-      const hitHeight = this.hit.offsetHeight;
-      const max = width * MAX_HIT_CARVE;
-      let left = 0;
-      let right = 0;
-      for (const o of obstacles) {
-        if (o.b0 >= hitHeight) continue;
-        if (o.x0 + o.x1 < width) left = Math.max(left, o.x1 + 2);
-        else right = Math.max(right, width - o.x0 + 2);
+    // Cut a notch into the top of the bar's click area wherever a button reaches down
+    // into it, so the button stays clickable. Below the buttons, the bottom
+    // MIN_HIT_STRIP px stay seekable across the full width.
+    notchHit(obstacles, width) {
+      const height = this.hit.offsetHeight;
+      const maxDepth = Math.max(0, height - MIN_HIT_STRIP);
+      const notches = [];
+      for (const o of [...obstacles].sort((a, b) => a.x0 - b.x0)) {
+        const depth = Math.min(maxDepth, height - o.b0);
+        if (depth <= 0) continue;
+        const x0 = clamp(o.x0 - 2, 0, width);
+        const x1 = clamp(o.x1 + 2, 0, width);
+        const last = notches[notches.length - 1];
+        if (last && x0 <= last.x1) {
+          last.x1 = Math.max(last.x1, x1);
+          last.depth = Math.max(last.depth, depth);
+        } else if (x1 > x0) {
+          notches.push({ x0, x1, depth });
+        }
       }
-      this.hit.style.left = `${Math.min(left, max)}px`;
-      this.hit.style.right = `${Math.min(right, max)}px`;
+      if (!notches.length) {
+        this.hit.style.clipPath = '';
+        return;
+      }
+      const points = ['0px 0px'];
+      for (const n of notches) points.push(`${n.x0}px 0px`, `${n.x0}px ${n.depth}px`, `${n.x1}px ${n.depth}px`, `${n.x1}px 0px`);
+      points.push(`${width}px 0px`, `${width}px ${height}px`, `0px ${height}px`);
+      this.hit.style.clipPath = `polygon(${points.join(', ')})`;
     }
 
     // Slide the time/speed pills right past any button in the way; if there's no room on
