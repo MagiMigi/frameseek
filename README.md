@@ -18,11 +18,14 @@ Works in Chrome, Edge and Firefox (desktop and Android) from one codebase. No bu
   | `J` / `L` | Back / forward 10s |
   | `,` / `.` | Previous / next frame (pauses the video) |
   | `<` / `>` | Slower / faster |
+  | `[` / `]` | Loop start / end |
+  | `\` | Stop looping |
 
   `↑` / `↓` keep Instagram's next / previous reel, and in stories `←` / `→` keep Instagram's previous / next story (use `J` / `L` to skip there). Shortcuts are ignored while you type in comments, replies or messages.
 
   Frame stepping measures each video's frame rate while it plays (24, 25, 30, 60 fps…) and falls back to 30 fps until it knows. Click the video or press play to continue.
 - **Playback speed**: 0.25× to 2×. Optionally kept for the next video.
+- **Loop a section**: click the A-B button once to mark the start, again to mark the end, and a third time to stop (or use `[`, `]` and `\`). The looped part is marked on the bar. Not on stories, where a loop would stop the story from moving on.
 - **Settings popup**: click the toolbar icon.
 
 ## Try it locally

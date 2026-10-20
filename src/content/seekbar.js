@@ -16,6 +16,12 @@
   const DEFAULT_FRAME = 1 / 30; // most Reels are 30fps; measured per video when possible
   const COMMON_FPS = [24, 25, 30, 48, 50, 60];
   const FRAME_SAMPLES = 30;
+  const MIN_REPEAT = 0.3; // shortest section that can be looped, in seconds
+  const REPEAT_TITLES = {
+    off: 'Loop a section: set the start ([)',
+    start: 'Loop: set the end (])',
+    on: 'Stop looping (\\)',
+  };
 
   // Instagram's own buttons near the bottom of a video (tagged people, mute, caption
   // links) that our controls must not cover.
@@ -40,6 +46,7 @@
 
     .root {
       --accent: #ff3d5a;
+      --loop: #ffc94a;
       position: absolute;
       inset: 0;
       overflow: hidden;
@@ -156,9 +163,31 @@
       font: inherit;
       font-variant-numeric: tabular-nums;
     }
-    .speed { cursor: pointer; }
-    .speed:hover { background: rgba(20, 20, 20, 0.85); }
-    .speed:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .speed,
+    .repeat { cursor: pointer; }
+    .speed:hover,
+    .repeat:hover { background: rgba(20, 20, 20, 0.85); }
+    .speed:focus-visible,
+    .repeat:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .repeat[data-state="start"] .a { color: var(--loop); }
+    .repeat[data-state="on"],
+    .repeat[data-state="on"]:hover { background: var(--loop); color: #111; }
+
+    /* The looped section: a bracket over the track from its start to its end. */
+    .repeat-range {
+      position: absolute;
+      top: -4px;
+      bottom: 0;
+      display: none;
+      box-sizing: border-box;
+      border: 2px solid var(--loop);
+      border-bottom: 0;
+      background: rgba(255, 201, 74, 0.18);
+      filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6));
+    }
+    .repeat-range.start,
+    .repeat-range.on { display: block; }
+    .repeat-range.start { width: 0; border-top: 0; border-right: 0; background: none; }
 
     .flash {
       position: absolute;
@@ -257,6 +286,9 @@
       this.lastText = '';
       this.destroyed = false;
       this.stepping = false; // paused by frame stepping; shortcuts keep targeting this video
+      this.repeat = null; // looped section: { start, end }, end is null until it's set
+      this.lastRepeatTime = null;
+      this.lastRepeatKey = '';
       this.frameDuration = DEFAULT_FRAME;
       this.frameSamples = [];
       this.lastMediaTime = null;
@@ -289,7 +321,19 @@
       this.controls = h('div', 'controls');
       this.timeEl = h('span', 'pill time');
       this.speedBtn = h('button', 'pill speed', { type: 'button', title: 'Playback speed', 'aria-label': 'Playback speed' });
-      this.controls.append(this.timeEl, this.speedBtn);
+      this.repeatBtn = h('button', 'pill repeat', {
+        type: 'button',
+        'data-state': 'off',
+        title: REPEAT_TITLES.off,
+        'aria-label': REPEAT_TITLES.off,
+      });
+      for (const [cls, text] of [['a', 'A'], ['dash', '-'], ['b', 'B']]) {
+        const part = h('span', cls);
+        part.textContent = text;
+        this.repeatBtn.append(part);
+      }
+      this.repeatBtn.hidden = this.story;
+      this.controls.append(this.timeEl, this.speedBtn, this.repeatBtn);
 
       this.tip = h('div', 'tip', { 'aria-hidden': 'true' });
       this.hit = h('div', 'hit', { role: 'slider', 'aria-label': 'Seek', 'aria-valuemin': '0' });
@@ -297,8 +341,9 @@
       this.buffered = h('div', 'fill buffered');
       this.hoverFill = h('div', 'fill hover');
       this.played = h('div', 'fill played');
+      this.repeatRange = h('div', 'repeat-range');
       this.knob = h('div', 'knob');
-      this.track.append(this.buffered, this.hoverFill, this.played, this.knob);
+      this.track.append(this.buffered, this.hoverFill, this.played, this.repeatRange, this.knob);
 
       // The visible track and the click area are separate, so the click area can be
       // narrowed around Instagram's buttons while the track still spans the full width.
@@ -348,7 +393,7 @@
         ['playing', this.onPlay],
         ['loadedmetadata', this.onPlay],
         ['pause', this.onRender],
-        ['ended', this.onRender],
+        ['ended', this.onEnded],
         ['timeupdate', this.onRender],
         ['durationchange', this.onRender],
         ['progress', this.onRender],
@@ -374,6 +419,8 @@
 
       this.speedBtn.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus where it was
       this.speedBtn.addEventListener('click', () => this.cycleSpeed());
+      this.repeatBtn.addEventListener('mousedown', (e) => e.preventDefault());
+      this.repeatBtn.addEventListener('click', () => this.cycleRepeat());
 
       for (const type of SWALLOWED_EVENTS) {
         this.root.addEventListener(type, (e) => e.stopPropagation(), { passive: true });
@@ -431,9 +478,16 @@
     };
 
     render() {
+      this.checkRepeat();
       const dur = this.duration;
       this.root.classList.toggle('no-duration', !dur);
       if (!dur) return;
+
+      const repeatKey = this.repeat ? `${this.repeat.start}|${this.repeat.end}|${dur}` : `off|${dur}`;
+      if (repeatKey !== this.lastRepeatKey) {
+        this.lastRepeatKey = repeatKey;
+        this.renderRepeat(dur);
+      }
 
       const cur = this.dragging ? this.dragTime : this.pendingSeek ?? this.video.currentTime;
       const p = clamp(cur / dur, 0, 1);
@@ -572,6 +626,83 @@
       this.frameHandle = 0;
     }
 
+    // ---- looping a section ---------------------------------------------------
+
+    // Set with the A-B button or the [ and ] keys. Not offered on stories, where a loop
+    // would keep the story from ever moving on.
+    setRepeatStart() {
+      if (this.story || !this.duration) return false;
+      const t = this.pendingSeek ?? this.video.currentTime;
+      this.repeat = { start: clamp(t, 0, Math.max(0, this.maxTime - MIN_REPEAT)), end: null };
+      this.flash(`Loop from ${formatTime(this.repeat.start)}`);
+      this.render();
+      return true;
+    }
+
+    // Without a start, the loop starts at the beginning. Setting the end before the start
+    // swaps them.
+    setRepeatEnd() {
+      if (this.story || !this.duration) return false;
+      let start = this.repeat ? this.repeat.start : 0;
+      let end = Math.min(this.pendingSeek ?? this.video.currentTime, this.maxTime);
+      if (end < start) [start, end] = [end, start];
+      if (end - start < MIN_REPEAT) {
+        this.flash('Loop too short');
+        return true;
+      }
+      this.repeat = { start, end };
+      this.lastRepeatTime = null;
+      this.flash(`Loop ${formatTime(start)}–${formatTime(end)}`);
+      this.seekNow(start);
+      return true;
+    }
+
+    clearRepeat() {
+      if (!this.repeat) return false;
+      this.repeat = null;
+      this.flash('Loop off');
+      this.render();
+      return true;
+    }
+
+    // The A-B button: start, then end, then off.
+    cycleRepeat() {
+      if (!this.repeat) this.setRepeatStart();
+      else if (this.repeat.end === null) this.setRepeatEnd();
+      else this.clearRepeat();
+    }
+
+    // Keeps playback inside the loop. Runs every frame while playing, and on timeupdate
+    // when frames aren't being drawn.
+    checkRepeat() {
+      const r = this.repeat;
+      if (!r || r.end === null || this.dragging) return;
+      const t = this.video.currentTime;
+      const last = this.lastRepeatTime;
+      this.lastRepeatTime = t;
+      // A video that loops by itself can jump from its end back to 0 between two checks.
+      const wrapped =
+        last !== null && t < last - 0.5 && last >= r.end - 0.6 && performance.now() - this.lastSeekAt > 300;
+      if (t >= r.end || wrapped) {
+        this.video.currentTime = r.start;
+        this.lastRepeatTime = r.start;
+      }
+    }
+
+    renderRepeat(dur) {
+      const r = this.repeat;
+      const state = !r ? 'off' : r.end === null ? 'start' : 'on';
+      this.repeatRange.classList.toggle('start', state === 'start');
+      this.repeatRange.classList.toggle('on', state === 'on');
+      if (r) {
+        this.repeatRange.style.left = `${(r.start / dur) * 100}%`;
+        this.repeatRange.style.width = r.end === null ? '' : `${((r.end - r.start) / dur) * 100}%`;
+      }
+      this.repeatBtn.dataset.state = state;
+      this.repeatBtn.title = REPEAT_TITLES[state];
+      this.repeatBtn.setAttribute('aria-label', REPEAT_TITLES[state]);
+    }
+
     // ---- speed ---------------------------------------------------------------
 
     setSpeed(rate) {
@@ -606,8 +737,18 @@
 
     onRender = () => this.render();
 
+    // A video that doesn't loop by itself stops at its end; carry on with the loop.
+    onEnded = () => {
+      if (this.repeat && this.repeat.end !== null) {
+        this.video.currentTime = this.repeat.start;
+        this.video.play().catch(() => {});
+      }
+      this.render();
+    };
+
     // The element got a new source: its frame rate may differ.
     onEmptied = () => {
+      this.repeat = null;
       this.stopFrameProbe();
       this.frameDuration = DEFAULT_FRAME;
       this.frameSamples = [];

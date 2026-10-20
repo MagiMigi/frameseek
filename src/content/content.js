@@ -118,6 +118,9 @@
       case 'l': case 'L': return (bar) => bar.seekBy(LONG_SKIP);
       case ',': return (bar) => bar.stepFrame(-1);
       case '.': return (bar) => bar.stepFrame(1);
+      case '[': return (bar) => bar.setRepeatStart();
+      case ']': return (bar) => bar.setRepeatEnd();
+      case '\\': return (bar) => bar.clearRepeat();
       case '<': return (bar) => (bar.stepSpeed(-1), true);
       case '>': return (bar) => (bar.stepSpeed(1), true);
       default: return null;
@@ -126,7 +129,9 @@
 
   function onKeyDown(e) {
     if (!settings.enabled || !settings.keyboard) return;
-    if (e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey || isTypingTarget(e)) return;
+    // Many keyboards (Turkish, German, …) type [ ] \ with AltGr, which arrives as Ctrl+Alt.
+    const altGr = e.getModifierState?.('AltGraph');
+    if (e.defaultPrevented || e.metaKey || ((e.ctrlKey || e.altKey) && !altGr) || isTypingTarget(e)) return;
     const action = shortcutFor(e);
     if (!action) return;
     if ((e.key === '<' || e.key === '>') && !settings.showSpeed) return;

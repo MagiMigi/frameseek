@@ -38,6 +38,7 @@ FEATURES
 • Current / total time display
 • Keyboard shortcuts: ← / → skip 5s (adjustable from 1 to 15s), J / L skip 10s, < / > change speed
 • Frame-by-frame stepping with , and . (like YouTube)
+• Loop any section: mark a start and an end with the A-B button or [ and ], great for learning dance moves, songs and tutorials
 • Playback speed from 0.25× to 2×, optionally remembered for the next video
 • Settings popup to turn each feature on or off
 
