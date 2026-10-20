@@ -189,6 +189,41 @@
     .repeat-range.on { display: block; }
     .repeat-range.start { width: 0; border-top: 0; border-right: 0; background: none; }
 
+    /* Grips on the loop's edges, for dragging its start and end. They sit above the seek
+       area so they win where the two overlap, and only take clicks while the controls show. */
+    .repeat-handle {
+      position: absolute;
+      bottom: -2px;
+      z-index: 2;
+      display: none;
+      width: 16px;
+      height: 24px;
+      margin-left: -8px;
+      cursor: ew-resize;
+      touch-action: none;
+      pointer-events: none;
+    }
+    .repeat-handle::before {
+      content: "";
+      position: absolute;
+      left: 5px;
+      top: 0;
+      width: 6px;
+      height: 12px;
+      border-radius: 3px;
+      background: var(--loop);
+      box-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+      opacity: 0;
+      transition: opacity 0.12s ease;
+    }
+    .repeat-handle.show { display: block; }
+    .root.zone .repeat-handle,
+    .root.hover-bar .repeat-handle,
+    .root.dragging .repeat-handle { pointer-events: auto; }
+    .root.zone .repeat-handle::before,
+    .root.hover-bar .repeat-handle::before,
+    .root.dragging .repeat-handle::before { opacity: 1; }
+
     .flash {
       position: absolute;
       left: 50%;
@@ -287,6 +322,7 @@
       this.destroyed = false;
       this.stepping = false; // paused by frame stepping; shortcuts keep targeting this video
       this.repeat = null; // looped section: { start, end }, end is null until it's set
+      this.handleDrag = null; // 'start' or 'end' while one of the loop's edges is dragged
       this.lastRepeatTime = null;
       this.lastRepeatKey = '';
       this.frameDuration = DEFAULT_FRAME;
@@ -342,8 +378,10 @@
       this.hoverFill = h('div', 'fill hover');
       this.played = h('div', 'fill played');
       this.repeatRange = h('div', 'repeat-range');
+      this.startHandle = h('div', 'repeat-handle', { role: 'slider', 'aria-label': 'Loop start' });
+      this.endHandle = h('div', 'repeat-handle', { role: 'slider', 'aria-label': 'Loop end' });
       this.knob = h('div', 'knob');
-      this.track.append(this.buffered, this.hoverFill, this.played, this.repeatRange, this.knob);
+      this.track.append(this.buffered, this.hoverFill, this.played, this.repeatRange, this.knob, this.startHandle, this.endHandle);
 
       // The visible track and the click area are separate, so the click area can be
       // narrowed around Instagram's buttons while the track still spans the full width.
@@ -421,6 +459,12 @@
       this.speedBtn.addEventListener('click', () => this.cycleSpeed());
       this.repeatBtn.addEventListener('mousedown', (e) => e.preventDefault());
       this.repeatBtn.addEventListener('click', () => this.cycleRepeat());
+      for (const handle of [this.startHandle, this.endHandle]) {
+        handle.addEventListener('pointerdown', this.onHandleDown);
+        handle.addEventListener('pointermove', this.onHandleMove);
+        handle.addEventListener('pointerup', this.onHandleUp);
+        handle.addEventListener('pointercancel', this.onHandleUp);
+      }
 
       for (const type of SWALLOWED_EVENTS) {
         this.root.addEventListener(type, (e) => e.stopPropagation(), { passive: true });
@@ -694,13 +738,67 @@
       const state = !r ? 'off' : r.end === null ? 'start' : 'on';
       this.repeatRange.classList.toggle('start', state === 'start');
       this.repeatRange.classList.toggle('on', state === 'on');
+      this.startHandle.classList.toggle('show', state !== 'off');
+      this.endHandle.classList.toggle('show', state === 'on');
       if (r) {
         this.repeatRange.style.left = `${(r.start / dur) * 100}%`;
         this.repeatRange.style.width = r.end === null ? '' : `${((r.end - r.start) / dur) * 100}%`;
+        this.startHandle.style.left = `${(r.start / dur) * 100}%`;
+        if (r.end !== null) this.endHandle.style.left = `${(r.end / dur) * 100}%`;
       }
       this.repeatBtn.dataset.state = state;
       this.repeatBtn.title = REPEAT_TITLES[state];
       this.repeatBtn.setAttribute('aria-label', REPEAT_TITLES[state]);
+    }
+
+    // Dragging an edge of the loop. The video seeks along with it, so you see the frame
+    // the edge is on; letting go restarts the loop from its start.
+    onHandleDown = (e) => {
+      if (e.button !== 0 || !this.repeat || !this.duration) return;
+      e.preventDefault();
+      this.handleDrag = e.currentTarget === this.startHandle ? 'start' : 'end';
+      this.dragging = true;
+      this.root.classList.add('dragging');
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // Capture can fail if the pointer is already gone; dragging still works while inside.
+      }
+      this.moveHandle(e.clientX);
+      this.startLoop();
+    };
+
+    onHandleMove = (e) => {
+      if (this.handleDrag) this.moveHandle(e.clientX);
+    };
+
+    onHandleUp = () => {
+      if (!this.handleDrag) return;
+      const r = this.repeat;
+      this.handleDrag = null;
+      this.dragging = false;
+      this.root.classList.remove('dragging');
+      this.lastRepeatTime = null;
+      this.flash(r.end === null ? `Loop from ${formatTime(r.start)}` : `Loop ${formatTime(r.start)}–${formatTime(r.end)}`);
+      this.seekNow(r.start);
+    };
+
+    // The start can't pass the end (or the end the start); they stay MIN_REPEAT apart.
+    moveHandle(clientX) {
+      const r = this.repeat;
+      const t = this.timeAt(clientX);
+      if (this.handleDrag === 'start') {
+        const latest = (r.end ?? this.maxTime) - MIN_REPEAT;
+        r.start = clamp(t, 0, Math.max(0, latest));
+        this.dragTime = r.start;
+      } else {
+        r.end = clamp(t, r.start + MIN_REPEAT, this.maxTime);
+        this.dragTime = r.end;
+      }
+      this.requestSeek(this.dragTime);
+      const tr = this.track.getBoundingClientRect();
+      this.showTip(tr.left + (this.dragTime / this.duration) * tr.width);
+      this.render();
     }
 
     // ---- speed ---------------------------------------------------------------
