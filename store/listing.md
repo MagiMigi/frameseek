@@ -45,10 +45,15 @@ FEATURES
 PRIVACY
 FrameSeek collects no data, makes no network requests and runs only on instagram.com. It only adds controls to the page in your own browser. It never downloads videos or acts on your account.
 
+OPEN SOURCE
+FrameSeek is free and open source (MIT). Code, issues and feedback: https://github.com/MagiMigi/frameseek
+
 Not affiliated with, endorsed by, or sponsored by Meta or Instagram. Instagram is a trademark of Meta Platforms, Inc.
 ```
 
 ## Chrome Web Store
+
+Live listing: https://chromewebstore.google.com/detail/frameseek-video-seek-bar/okdonibfphhnggbpfpbagfgpocgjfnhe
 
 1. Register at https://chrome.google.com/webstore/devconsole. The developer fee is a one-time $5.
 2. Click **New item** and upload the zip.

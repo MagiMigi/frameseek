@@ -6,6 +6,10 @@ Works in Chrome, Edge and Firefox (desktop and Android) from one codebase. No bu
 
 > Not affiliated with, endorsed by, or sponsored by Meta or Instagram.
 
+## Install
+
+- **Chrome:** [Chrome Web Store](https://chromewebstore.google.com/detail/frameseek-video-seek-bar/okdonibfphhnggbpfpbagfgpocgjfnhe)
+
 ## Features
 
 - **Seek bar** on every Instagram video: Reels feed, single reel pages, feed posts, the post popup and stories. On stories, the story pauses while you drag and carries on after.
