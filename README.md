@@ -2,13 +2,14 @@
 
 A browser extension that adds a YouTube-style seek bar to videos and Reels on instagram.com, plus skip shortcuts and playback speed.
 
-Works in Chrome, Edge and Firefox (desktop and Android) from one codebase. No build step, no dependencies, no data collection.
+Works in Chrome, Edge, Opera and Firefox (desktop and Android) from one codebase. No build step, no dependencies, no data collection.
 
 > Not affiliated with, endorsed by, or sponsored by Meta or Instagram.
 
 ## Install
 
 - **Chrome:** [Chrome Web Store](https://chromewebstore.google.com/detail/frameseek-video-seek-bar/okdonibfphhnggbpfpbagfgpocgjfnhe)
+- **Opera:** open the same [Chrome Web Store page](https://chromewebstore.google.com/detail/frameseek-video-seek-bar/okdonibfphhnggbpfpbagfgpocgjfnhe) in Opera and click **Add to Opera**.
 
 ## Features
 
@@ -78,7 +79,7 @@ Instagram's class names are random and change often, so the extension only looks
 
 ```bash
 npm run icons     # regenerate icons/*.png
-npm run package   # build dist/frameseek-<version>.zip for the stores
+npm run package   # build dist/frameseek-<version>.zip (and -opera.zip) for the stores
 npm run serve     # http://localhost:5173/test/harness.html
 npm run lint      # Mozilla's web-ext linter
 ```

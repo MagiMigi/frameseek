@@ -1,6 +1,9 @@
 // Builds dist/frameseek-<version>.zip with only the files the extension needs
 // (manifest.json, src/, icons/). The same zip is uploaded to the Chrome, Edge and
-// Firefox stores. No dependencies: a minimal ZIP writer using Node's built-in zlib.
+// Firefox stores. Also builds dist/frameseek-<version>-opera.zip, whose manifest
+// drops the Firefox-only browser_specific_settings, since Opera's review rejects
+// unnecessary manifest entries.
+// No dependencies: a minimal ZIP writer using Node's built-in zlib.
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,16 +79,26 @@ function buildZip(files) {
   return Buffer.concat([...locals, ...centrals, end]);
 }
 
-const { version } = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8'));
+const manifest = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8'));
 const files = INCLUDE.flatMap((p) => walk(join(ROOT, p))).map((abs) => ({
   name: relative(ROOT, abs).split(sep).join('/'),
   data: readFileSync(abs),
 }));
 
+const { browser_specific_settings, ...operaManifest } = manifest;
+const operaFiles = files.map((f) =>
+  f.name === 'manifest.json'
+    ? { name: f.name, data: Buffer.from(JSON.stringify(operaManifest, null, 2) + '\n') }
+    : f,
+);
+
 const outDir = join(ROOT, 'dist');
 mkdirSync(outDir, { recursive: true });
-const out = join(outDir, `frameseek-${version}.zip`);
+const out = join(outDir, `frameseek-${manifest.version}.zip`);
+const operaOut = join(outDir, `frameseek-${manifest.version}-opera.zip`);
 writeFileSync(out, buildZip(files));
+writeFileSync(operaOut, buildZip(operaFiles));
 
 console.log(`wrote ${out}`);
 for (const f of files) console.log(`  ${f.name}`);
+console.log(`wrote ${operaOut} (manifest without browser_specific_settings)`);

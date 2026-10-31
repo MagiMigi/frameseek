@@ -1,12 +1,12 @@
 # Store submission kit
 
-Everything to paste into the Chrome Web Store, Microsoft Edge Add-ons and Firefox Add-ons forms. Upload the same zip to all three:
+Everything to paste into the Chrome Web Store, Microsoft Edge Add-ons, Firefox Add-ons and Opera add-ons forms. Build the zips with:
 
 ```bash
 npm run package
 ```
 
-That builds `dist/frameseek-<version>.zip`. Every new upload needs a higher `version` in `manifest.json`.
+That builds `dist/frameseek-<version>.zip` for Chrome, Edge and Firefox, and `dist/frameseek-<version>-opera.zip` for Opera (the same files, without the Firefox-only `browser_specific_settings` in the manifest). Every new upload needs a higher `version` in `manifest.json`.
 
 ## Before you submit
 
@@ -109,12 +109,38 @@ Live listing: https://chromewebstore.google.com/detail/frameseek-video-seek-bar/
 6. The manifest already includes the Firefox add-on ID and `data_collection_permissions: none`. Keep the ID the same in future versions.
 7. Run `npm run lint` first. It uses the same checks as the AMO validator.
 
+## Opera add-ons
+
+Opera's moderators check every listing by hand against their [acceptance criteria](https://help.opera.com/en/extensions/acceptance-criteria/), and reviews can take weeks.
+
+1. Test it in Opera first: open `opera://extensions`, turn on **Developer mode**, click **Load unpacked** and pick this folder. Check the bar, the shortcuts and the popup on https://www.instagram.com/reels/.
+2. Sign in with an Opera account at https://addons.opera.com/developer/ and accept the developer terms.
+3. Upload `dist/frameseek-<version>-opera.zip` (not the plain zip).
+4. Fill in the listing:
+   - **Name:** `FrameSeek: Video Seek Bar & Speed` (Opera's limit is 45 characters).
+   - **Summary:** Opera wants complete sentences, so use this instead of the Chrome one:
+     ```
+     FrameSeek adds a YouTube-style seek bar, skip shortcuts and playback speed to Instagram videos and Reels on the web.
+     ```
+   - **Description:** the one above.
+   - **Category:** Social (or Productivity).
+   - **Screenshots:** Opera prefers 612×408 (800×600 at most). Use the 612×408 versions (see the Images section).
+   - **Homepage / support page:** `https://github.com/MagiMigi/frameseek`
+   - **Privacy policy:** `https://github.com/MagiMigi/frameseek/blob/main/PRIVACY.md`
+   - **License:** MIT. Opera's terms say that without a license of your own, the add-on is offered under CC BY-NC-ND 4.0, so make sure the form records MIT.
+5. If the form has a notes field for the moderators, paste:
+   ```
+   Adds a seek bar, skip shortcuts, frame stepping, playback speed and section looping to videos on instagram.com. The code is not minified or bundled. No data collection, no network requests, no remote code. No sign-in needed: open https://www.instagram.com/reels/ and hover the bottom of a video. Speed controls and Loop are off by default; turn them on in the toolbar popup.
+   ```
+6. Track the review under **Submitted extensions**. For a new version, click **Upgrade** next to the package and upload the new Opera zip.
+
 ## Images
 
 | Asset | Size | Notes |
 | --- | --- | --- |
 | Store icon | 128×128 | `icons/icon-128.png` |
 | Screenshots | 1280×800 (or 640×400) | 1–5 images, 24-bit PNG or JPEG without transparency. Use video-only captures, so other people's names, photos and comments don't show. |
+| Screenshots (Opera) | 612×408 | Crop the 1280×800 ones to 1200×800 and scale them down, e.g. `ffmpeg -i in.png -vf "crop=1200:800,scale=612:408:flags=lanczos,format=rgb24" out.png` |
 | Small promo tile (Chrome) | 440×280 | `store/promo-440x280.png` |
 | Marquee (Chrome, optional) | 1400×560 | Only needed to be featured |
 
