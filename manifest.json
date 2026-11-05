@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "FrameSeek: Video Seek Bar & Speed",
   "short_name": "FrameSeek",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Adds a YouTube-style seek bar, skip shortcuts and playback speed to Instagram videos and Reels. Not affiliated with Meta.",
   "homepage_url": "https://github.com/MagiMigi/frameseek",
   "icons": {
