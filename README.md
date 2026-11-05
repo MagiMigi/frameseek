@@ -30,8 +30,9 @@ Works in Chrome, Edge, Opera and Firefox (desktop and Android) from one codebase
 
   Frame stepping measures each video's frame rate while it plays (24, 25, 30, 60 fps…) and falls back to 30 fps until it knows. Click the video or press play to continue.
 - **Playback speed**: 0.25× to 2×. Optionally kept for the next video. Off by default; turn on "Speed controls" in the popup.
+- **Hold for 2×** (like YouTube): hold the left mouse button on a playing video and it plays at 2× until you let go, then goes back to your speed. A quick click still pauses. Not on stories, where holding pauses the story as before. On by default; turn off "Hold for 2×" in the popup.
 - **Loop a section** (off by default; turn on "Loop" in the popup): click the A-B button once to mark the start, again to mark the end, and a third time to stop (or use `[`, `]` and `\`). The looped part is marked on the bar; drag its yellow edges to adjust it, and the video follows so you can see the exact frame. Not on stories, where a loop would stop the story from moving on.
-- **Settings popup**: click the toolbar icon to turn each feature on or off. Speed controls and Loop start off, so out of the box you get just the seek bar and shortcuts.
+- **Settings popup**: click the toolbar icon to turn each feature on or off. Speed controls and Loop start off, so out of the box you get the seek bar, the shortcuts and hold for 2×.
 
 ## Try it locally
 
@@ -92,7 +93,8 @@ npm run lint      # Mozilla's web-ext linter
   - The Reels feed while scrolling.
   - A `/reel/...` page.
   - A feed video post and the post popup.
-  - Stories: drag, J / L, and check ← / → still switch stories.
+  - Hold the mouse on a playing reel: 2× while held, and it keeps playing when you let go. A quick click still pauses.
+  - Stories: drag, J / L, and check ← / → still switch stories and holding still pauses the story.
   - Popup toggles (they apply live).
 
 ## Publishing

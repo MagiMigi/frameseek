@@ -40,6 +40,7 @@ FEATURES
 • Frame-by-frame stepping with , and . (like YouTube)
 • Loop any section: mark a start and an end with the A-B button or [ and ], great for learning dance moves, songs and tutorials
 • Playback speed from 0.25× to 2×, optionally remembered for the next video
+• Hold the mouse on a video to play it at 2× until you let go, like YouTube
 • Settings popup to turn each feature on or off (speed controls and looping start off)
 
 PRIVACY
@@ -84,7 +85,7 @@ Live listing: https://chromewebstore.google.com/detail/frameseek-video-seek-bar/
 5. **Distribution:** Free, Public, all regions.
 6. **Test instructions** tab: leave the username and password empty (never give reviewers your own Instagram login). Under additional instructions, paste:
    ```
-   No sign-in needed: open https://www.instagram.com/reels/ (it works signed out). Hover the bottom of a video to show the seek bar, then click or drag it. Keys: left/right arrows skip, J/L skip 10s, comma/period step one frame. Speed controls and Loop are off by default: turn them on in the toolbar popup, then use the speed button or < and >, and the A-B button or [ and ] to loop part of a video. FrameSeek collects no data and makes no network requests.
+   No sign-in needed: open https://www.instagram.com/reels/ (it works signed out). Hover the bottom of a video to show the seek bar, then click or drag it. Keys: left/right arrows skip, J/L skip 10s, comma/period step one frame. Hold the left mouse button on a playing video to play it at 2× until you let go. Speed controls and Loop are off by default: turn them on in the toolbar popup, then use the speed button or < and >, and the A-B button or [ and ] to loop part of a video. FrameSeek collects no data and makes no network requests.
    ```
 7. **Account** page: turn on email notifications for "item review completed" and "item published", so you hear when the review is done.
 8. Submit for review. It usually takes a few days, longer with the detailed review.
@@ -130,7 +131,7 @@ Opera's moderators check every listing by hand against their [acceptance criteri
    - **License:** MIT. Opera's terms say that without a license of your own, the add-on is offered under CC BY-NC-ND 4.0, so make sure the form records MIT.
 5. If the form has a notes field for the moderators, paste:
    ```
-   Adds a seek bar, skip shortcuts, frame stepping, playback speed and section looping to videos on instagram.com. The code is not minified or bundled. No data collection, no network requests, no remote code. No sign-in needed: open https://www.instagram.com/reels/ and hover the bottom of a video. Speed controls and Loop are off by default; turn them on in the toolbar popup.
+   Adds a seek bar, skip shortcuts, frame stepping, playback speed (including hold-for-2×) and section looping to videos on instagram.com. The code is not minified or bundled. No data collection, no network requests, no remote code. No sign-in needed: open https://www.instagram.com/reels/ and hover the bottom of a video, or hold the mouse on it to play at 2×. Speed controls and Loop are off by default; turn them on in the toolbar popup.
    ```
 6. Track the review under **Submitted extensions**. For a new version, click **Upgrade** next to the package and upload the new Opera zip.
 

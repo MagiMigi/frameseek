@@ -55,6 +55,14 @@
 
         <label class="row">
           <span>
+            <strong>Hold for 2×</strong>
+            <small>Hold the mouse on a video to play it fast</small>
+          </span>
+          <input type="checkbox" id="holdSpeed" class="switch" />
+        </label>
+
+        <label class="row">
+          <span>
             <strong>Loop</strong>
             <small>A-B button and [ / ] keys to repeat a part</small>
           </span>
@@ -73,6 +81,8 @@
           <dd>Previous / next frame (pauses)</dd>
           <dt data-requires="showSpeed"><kbd>&lt;</kbd> <kbd>&gt;</kbd></dt>
           <dd data-requires="showSpeed">Slower / faster</dd>
+          <dt data-requires="holdSpeed">Hold click</dt>
+          <dd data-requires="holdSpeed">2× while held, not in stories</dd>
           <dt data-requires="showLoop"><kbd>[</kbd> <kbd>]</kbd></dt>
           <dd data-requires="showLoop">Loop start / end (or the A-B button); drag the yellow edges to adjust</dd>
           <dt data-requires="showLoop"><kbd>\</kbd></dt>

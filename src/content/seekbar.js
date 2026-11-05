@@ -17,6 +17,15 @@
   const COMMON_FPS = [24, 25, 30, 48, 50, 60];
   const FRAME_SAMPLES = 30;
   const MIN_REPEAT = 0.3; // shortest section that can be looped, in seconds
+  const HOLD_MS = 300; // press the picture this long to play fast; a quicker click stays a click
+  const HOLD_RATE = 2;
+  const HOLD_SLOP_PX = 8; // moving further before the hold starts makes it a drag, not a hold
+  // A click this soon after letting go of a hold would make a "double click" with the
+  // release (Windows' default double-click time), and Instagram likes a post on those.
+  const DOUBLE_CLICK_MS = 500;
+  // Events watched after a hold: see onRelease. Instagram still gets the press and the
+  // release themselves; it does nothing with them, but it keeps track of them.
+  const RELEASE_EVENTS = ['pointerdown', 'click', 'dblclick'];
   const REPEAT_TITLES = {
     off: 'Loop a section: set the start ([)',
     start: 'Loop: set the end (])',
@@ -225,6 +234,27 @@
     }
     .flash.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 
+    /* Shown while the mouse is held down on the picture and the video plays fast. */
+    .hold {
+      position: absolute;
+      left: 50%;
+      top: 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(20, 20, 20, 0.7);
+      font-size: 15px;
+      font-weight: 600;
+      white-space: nowrap;
+      transform: translateX(-50%) scale(0.92);
+      opacity: 0;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+    .hold.show { opacity: 1; transform: translateX(-50%) scale(1); }
+    .hold svg { width: 14px; height: 11px; fill: currentColor; }
+
     @media (pointer: coarse) {
       .hit { height: 28px; }
       .controls { bottom: 34px; }
@@ -250,6 +280,17 @@
   }
 
   const formatRate = (rate) => `${Number(rate.toFixed(2))}×`;
+
+  // Two "play" triangles, like a fast-forward button.
+  function fastIcon() {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 16 12');
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', 'M0 0l8 6-8 6zM8 0l8 6-8 6z');
+    svg.append(path);
+    return svg;
+  }
 
   // 29.97 → 30, 23.976 → 24 and so on; anything unusual is kept as measured.
   function snapFrame(gap) {
@@ -314,6 +355,11 @@
       this.frameSamples = [];
       this.lastMediaTime = null;
       this.frameHandle = 0;
+      // Mouse held down on the picture: { pointerId, x, y, timer, active, restoreRate }.
+      // Active once it has lasted HOLD_MS and the video plays at HOLD_RATE.
+      this.hold = null;
+      this.releaseTimer = 0;
+      this.releaseClick = false; // the click of a hold's release is still to come
 
       this.build();
       this.mount();
@@ -339,6 +385,10 @@
 
       this.root = h('div', 'root no-duration');
       this.flashEl = h('div', 'flash', { 'aria-hidden': 'true' });
+      this.holdEl = h('div', 'hold', { 'aria-hidden': 'true' });
+      const holdText = h('span', 'hold-rate');
+      holdText.textContent = formatRate(HOLD_RATE);
+      this.holdEl.append(holdText, fastIcon());
       this.controls = h('div', 'controls');
       this.timeEl = h('span', 'pill time');
       this.speedBtn = h('button', 'pill speed', { type: 'button', title: 'Playback speed', 'aria-label': 'Playback speed' });
@@ -369,7 +419,7 @@
 
       // The visible track and the click area are separate, so the click area can be
       // narrowed around Instagram's buttons while the track still spans the full width.
-      this.root.append(this.flashEl, this.controls, this.tip, this.track, this.hit);
+      this.root.append(this.flashEl, this.holdEl, this.controls, this.tip, this.track, this.hit);
       shadow.append(style, this.root);
     }
 
@@ -384,6 +434,7 @@
       el.appendChild(this.host);
       el.addEventListener('pointermove', this.onZoneMove, { passive: true });
       el.addEventListener('pointerdown', this.onZoneDown, { passive: true, capture: true });
+      el.addEventListener('pointerdown', this.onHoldDown, { passive: true, capture: true });
       el.addEventListener('pointerleave', this.onZoneLeave, { passive: true });
       this.mountEl = el;
     }
@@ -393,6 +444,7 @@
       if (el) {
         el.removeEventListener('pointermove', this.onZoneMove);
         el.removeEventListener('pointerdown', this.onZoneDown, { capture: true });
+        el.removeEventListener('pointerdown', this.onHoldDown, { capture: true });
         el.removeEventListener('pointerleave', this.onZoneLeave);
         if (this.restorePosition !== null) el.style.position = this.restorePosition;
       }
@@ -459,15 +511,17 @@
       this.settings = settings;
       this.speedBtn.hidden = !settings.showSpeed;
       this.repeatBtn.hidden = this.story || !settings.showLoop;
+      if (!settings.holdSpeed) this.cancelHold();
       if (!settings.showSpeed) {
         // No speed control on screen, so don't leave a video playing at a changed speed.
         if (this.desiredRate !== null) {
           this.desiredRate = null;
           this.video.defaultPlaybackRate = 1;
-          this.video.playbackRate = 1;
+          if (this.hold?.active) this.hold.restoreRate = 1;
+          else this.video.playbackRate = 1;
           this.renderSpeed();
         }
-      } else if (settings.rememberSpeed && Math.abs(settings.speed - this.video.playbackRate) > 0.001) {
+      } else if (settings.rememberSpeed && Math.abs(settings.speed - this.baseRate) > 0.001) {
         this.setSpeed(settings.speed);
       }
       if (!settings.showLoop && this.repeat) {
@@ -479,6 +533,8 @@
     destroy({ resetSpeed = false } = {}) {
       if (this.destroyed) return;
       this.destroyed = true;
+      this.cancelHold();
+      this.endRelease();
       cancelAnimationFrame(this.frame);
       cancelAnimationFrame(this.seekFrame);
       clearTimeout(this.flashTimer);
@@ -554,8 +610,9 @@
       return 0;
     }
 
+    // The speed button shows the chosen speed, not the 2× of a hold.
     renderSpeed() {
-      this.speedBtn.textContent = formatRate(this.video.playbackRate || 1);
+      this.speedBtn.textContent = formatRate(this.baseRate || 1);
     }
 
     flash(text) {
@@ -800,11 +857,18 @@
 
     // ---- speed ---------------------------------------------------------------
 
+    // The speed the video plays at when it isn't being held for 2×.
+    get baseRate() {
+      if (!this.hold?.active) return this.video.playbackRate;
+      return this.desiredRate ?? this.hold.restoreRate;
+    }
+
+    // During a hold the new speed takes over when the mouse is let go.
     setSpeed(rate) {
       this.desiredRate = rate;
       this.rateFixes = 0;
       this.video.defaultPlaybackRate = rate; // survives a source change on the same element
-      this.video.playbackRate = rate;
+      if (!this.hold?.active) this.video.playbackRate = rate;
       this.renderSpeed();
     }
 
@@ -815,12 +879,12 @@
     }
 
     cycleSpeed() {
-      const cur = this.video.playbackRate;
+      const cur = this.baseRate;
       this.changeSpeed(CLICK_SPEEDS.find((s) => s > cur + 0.001) ?? CLICK_SPEEDS[0]);
     }
 
     stepSpeed(dir) {
-      const cur = this.video.playbackRate;
+      const cur = this.baseRate;
       let idx = 0;
       SPEEDS.forEach((s, i) => {
         if (Math.abs(s - cur) < Math.abs(SPEEDS[idx] - cur)) idx = i;
@@ -843,6 +907,7 @@
 
     // The element got a new source: its frame rate may differ.
     onEmptied = () => {
+      this.cancelHold();
       this.repeat = null;
       this.stopFrameProbe();
       this.frameDuration = DEFAULT_FRAME;
@@ -854,7 +919,7 @@
 
     onPlay = () => {
       if (!this.video.paused) this.stepping = false;
-      if (this.desiredRate !== null && Math.abs(this.video.playbackRate - this.desiredRate) > 0.001) {
+      if (!this.hold?.active && this.desiredRate !== null && Math.abs(this.video.playbackRate - this.desiredRate) > 0.001) {
         this.video.playbackRate = this.desiredRate;
       }
       this.render();
@@ -868,6 +933,7 @@
 
     onRateChange = () => {
       this.renderSpeed();
+      if (this.hold?.active) return; // the 2× is ours; the speed comes back on release
       if (this.desiredRate === null || Math.abs(this.video.playbackRate - this.desiredRate) < 0.001) return;
       if (this.rateFixes++ > 20) return; // something keeps overriding the speed; stop fighting it
       this.video.playbackRate = this.desiredRate;
@@ -955,6 +1021,118 @@
         if (!this.dragging) this.root.classList.remove('zone');
       }, TOUCH_ZONE_MS);
     };
+
+    // ---- holding for 2× ------------------------------------------------------
+
+    // Like YouTube: holding the left mouse button on the picture plays the video at 2×
+    // until it's let go. A quick click still reaches Instagram and pauses as before.
+    // Not on stories, where Instagram's own press-and-hold pauses the story, and not on
+    // a paused video.
+    onHoldDown = (e) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0 || e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return;
+      if (this.story || !this.settings.holdSpeed || this.video.paused || !this.duration) return;
+      if (e.composedPath().includes(this.host) || this.onInstagramButton(e.target)) return;
+      this.cancelHold();
+      this.hold = {
+        pointerId: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        timer: setTimeout(this.startHold, HOLD_MS),
+        active: false,
+        restoreRate: 1,
+      };
+      window.addEventListener('pointermove', this.onHoldMove, true);
+      window.addEventListener('pointerup', this.onHoldUp, true);
+      window.addEventListener('pointercancel', this.onHoldUp, true);
+      window.addEventListener('blur', this.onHoldUp);
+    };
+
+    // Moving away before the hold starts means a drag (e.g. selecting text), not a hold.
+    onHoldMove = (e) => {
+      const hold = this.hold;
+      if (!hold || hold.active || e.pointerId !== hold.pointerId) return;
+      if (Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > HOLD_SLOP_PX) this.cancelHold();
+    };
+
+    startHold = () => {
+      const hold = this.hold;
+      if (!hold) return;
+      hold.timer = 0;
+      if (this.video.paused) {
+        this.cancelHold();
+        return;
+      }
+      hold.active = true;
+      hold.restoreRate = this.video.playbackRate;
+      this.video.playbackRate = HOLD_RATE;
+      this.holdEl.classList.add('show');
+    };
+
+    // Letting go: back to the chosen speed. After a hold, the click that follows must not
+    // reach Instagram, or it would pause the video.
+    onHoldUp = (e) => {
+      const hold = this.hold;
+      if (!hold || (e.type !== 'blur' && e.pointerId !== hold.pointerId)) return;
+      const wasActive = hold.active;
+      this.cancelHold();
+      if (wasActive && e.type === 'pointerup') this.holdBackRelease();
+    };
+
+    // Ends a hold (or a press that hasn't become one yet) and restores the speed.
+    cancelHold() {
+      const hold = this.hold;
+      if (!hold) return;
+      this.hold = null;
+      clearTimeout(hold.timer);
+      window.removeEventListener('pointermove', this.onHoldMove, true);
+      window.removeEventListener('pointerup', this.onHoldUp, true);
+      window.removeEventListener('pointercancel', this.onHoldUp, true);
+      window.removeEventListener('blur', this.onHoldUp);
+      if (!hold.active) return;
+      this.holdEl.classList.remove('show');
+      this.video.playbackRate = this.desiredRate ?? hold.restoreRate;
+    }
+
+    holdBackRelease() {
+      this.endRelease();
+      this.releaseClick = true;
+      for (const type of RELEASE_EVENTS) window.addEventListener(type, this.onRelease, true);
+      this.releaseTimer = setTimeout(this.endRelease, DOUBLE_CLICK_MS);
+    }
+
+    // After a hold, Instagram never sees the click of its release, nor a double click made
+    // of that release and a quick click after it. A new press is a new click, which goes
+    // through as usual.
+    onRelease = (e) => {
+      if (e.type === 'pointerdown') {
+        this.releaseClick = false;
+        return;
+      }
+      if (e.type === 'click') {
+        if (!this.releaseClick) return;
+        this.releaseClick = false;
+      }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    };
+
+    endRelease = () => {
+      clearTimeout(this.releaseTimer);
+      this.releaseTimer = 0;
+      this.releaseClick = false;
+      for (const type of RELEASE_EVENTS) window.removeEventListener(type, this.onRelease, true);
+    };
+
+    // Instagram's own small buttons and links on the video (mute, tagged people, caption
+    // links) keep their clicks. Big see-through overlays count as the picture.
+    onInstagramButton(target) {
+      const rr = this.root.getBoundingClientRect();
+      const maxHeight = Math.min(rr.height * 0.4, OBSTACLE_MAX_HEIGHT);
+      for (let el = target; el instanceof Element && el !== this.mountEl; el = el.parentElement) {
+        if (el.matches(OBSTACLE_SELECTOR) && el.getBoundingClientRect().height <= maxHeight) return true;
+      }
+      return false;
+    }
 
     // ---- staying clear of Instagram's buttons ------------------------------------
 

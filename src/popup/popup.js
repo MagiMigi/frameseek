@@ -4,7 +4,7 @@
   const { getSettings, setSettings, onSettingsChanged, SKIP_CHOICES } = globalThis.FrameSeekSettings;
   const api = globalThis.browser ?? globalThis.chrome;
 
-  const TOGGLES = ['enabled', 'keyboard', 'showSpeed', 'rememberSpeed', 'showLoop'];
+  const TOGGLES = ['enabled', 'keyboard', 'showSpeed', 'rememberSpeed', 'holdSpeed', 'showLoop'];
   const $ = (id) => document.getElementById(id);
 
   for (const s of SKIP_CHOICES) {
