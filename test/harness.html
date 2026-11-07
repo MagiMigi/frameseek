@@ -80,6 +80,32 @@
         color: #fff;
         cursor: pointer;
       }
+      /* Like Instagram's volume control: a round button that opens into a tall, narrow slider. */
+      .ig-volume {
+        position: absolute;
+        right: 48px;
+        bottom: 12px;
+        width: 28px;
+        height: 28px;
+        border-radius: 14px;
+        background: rgba(0, 0, 0, 0.6);
+      }
+      .ig-volume:hover {
+        height: 124px;
+      }
+      .ig-volume-track {
+        display: none;
+        position: absolute;
+        left: 10px;
+        top: 12px;
+        width: 8px;
+        height: 80px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.6);
+      }
+      .ig-volume:hover .ig-volume-track {
+        display: block;
+      }
       .ig-tags {
         position: absolute;
         left: 12px;
@@ -217,7 +243,16 @@
           log(`IG mute button (post ${n}) muted=${video.muted}`);
         });
 
-        media.append(wrap, overlay, mute);
+        const volume = document.createElement('div');
+        volume.className = 'ig-volume';
+        volume.setAttribute('role', 'slider');
+        volume.setAttribute('aria-label', 'Adjust volume');
+        const volumeTrack = document.createElement('div');
+        volumeTrack.className = 'ig-volume-track';
+        volume.append(volumeTrack);
+        volume.addEventListener('click', () => log(`IG volume slider (post ${n})`));
+
+        media.append(wrap, overlay, mute, volume);
         if (kind === 'feed') {
           const tags = document.createElement('button');
           tags.className = 'ig-tags';

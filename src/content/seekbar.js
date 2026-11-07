@@ -1123,13 +1123,17 @@
       for (const type of RELEASE_EVENTS) window.removeEventListener(type, this.onRelease, true);
     };
 
-    // Instagram's own small buttons and links on the video (mute, tagged people, caption
-    // links) keep their clicks. Big see-through overlays count as the picture.
+    // Instagram's own buttons and links on the video (mute, volume, tagged people, caption
+    // links) keep their clicks. Only a see-through overlay both tall and wide counts as
+    // the picture: the open volume slider is tall too, but narrow.
     onInstagramButton(target) {
       const rr = this.root.getBoundingClientRect();
       const maxHeight = Math.min(rr.height * 0.4, OBSTACLE_MAX_HEIGHT);
+      const maxWidth = rr.width * 0.4;
       for (let el = target; el instanceof Element && el !== this.mountEl; el = el.parentElement) {
-        if (el.matches(OBSTACLE_SELECTOR) && el.getBoundingClientRect().height <= maxHeight) return true;
+        if (!el.matches(OBSTACLE_SELECTOR)) continue;
+        const r = el.getBoundingClientRect();
+        if (r.height <= maxHeight || r.width <= maxWidth) return true;
       }
       return false;
     }
