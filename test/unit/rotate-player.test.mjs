@@ -193,6 +193,18 @@ test('a quarter turn reshapes the frame and the inner wrapper', () => {
   rot.destroy();
 });
 
+test("the turn leaves FrameSeek's own seek bar element alone", () => {
+  // The seek bar's host resets everything (all: initial), so it reports --x-height too.
+  const { frame, video } = reelsPage();
+  const barHost = new FakeNode('div', { style: { '--x-height': 'initial' } });
+  barHost.attachShadow();
+  frame.append(barHost);
+  const rot = attach(video, {});
+  rot.turn(-1);
+  assert.equal(barHost.style.getPropertyValue('--x-height'), 'initial');
+  rot.destroy();
+});
+
 test('turning back restores every inline style exactly', () => {
   const { row, frame, wrapper, video } = reelsPage();
   const before = texts([row, frame, wrapper, video]);
@@ -358,6 +370,24 @@ test("the popup frame keeps Instagram's own flex-basis", () => {
   assert.equal(frame.style.getPropertyValue('flex-basis'), 'auto');
   rot.turn(1);
   assert.equal(frame.style.text, before);
+  rot.destroy();
+});
+
+test('an aspect-ratio box inside the post frame takes the turned proportion', () => {
+  // Signed in, a wrapper keeps the video's 9:16 shape with padding-bottom: 177.778%,
+  // which would make it far taller than the widened frame.
+  const { frame, video } = postPage();
+  const box = new FakeNode('div', { style: { 'padding-bottom': '177.778%' } });
+  frame.children = [];
+  box.append(video);
+  frame.append(box);
+  const rot = attach(video, {});
+  rot.turn(-1);
+  const width = parseFloat(frame.style.getPropertyValue('width'));
+  const pb = parseFloat(box.style.getPropertyValue('padding-bottom'));
+  assert.ok(Math.abs((pb / 100) * width - 480) < 1, `the box is ${((pb / 100) * width).toFixed(1)} px tall, not the frame's 480`);
+  rot.turn(1);
+  assert.equal(box.style.text, 'padding-bottom:177.778%');
   rot.destroy();
 });
 

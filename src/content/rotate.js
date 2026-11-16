@@ -476,10 +476,23 @@
       this.shape.set(this.row, 'margin-bottom', pad);
       // Inner wrappers that size themselves from --x-height (signed in) follow the frame.
       for (const el of this.frame.querySelectorAll('*')) {
-        if (el.style?.getPropertyValue('--x-height')) this.shape.set(el, '--x-height', `${size.height}px`);
+        // (Skipping FrameSeek's own elements: the seek bar's host resets everything.)
+        if (!el.shadowRoot && el.style?.getPropertyValue('--x-height')) this.shape.set(el, '--x-height', `${size.height}px`);
       }
+      this.fitAspectBoxes(size.width, size.height);
       this.turnVideo(size.width, size.height);
       return size.width;
+    }
+
+    // Aspect-ratio boxes (a percentage padding) between the frame and the video keep the
+    // upright 9:16 shape, so a widened frame would make them far taller than the frame
+    // (a black area over the page below). Give them the turned frame's proportion.
+    fitAspectBoxes(width, height) {
+      for (let el = this.video.parentElement; el && el !== this.frame; el = el.parentElement) {
+        for (const prop of ['padding-bottom', 'padding-top']) {
+          if (el.style.getPropertyValue(prop).endsWith('%')) this.shape.set(el, prop, `${(height / width) * 100}%`);
+        }
+      }
     }
 
     shapePost() {
@@ -508,6 +521,7 @@
         this.shape.set(this.row, 'margin-left', half);
         this.shape.set(this.row, 'margin-right', half);
       }
+      this.fitAspectBoxes(size.width, h);
       this.turnVideo(size.width, size.height);
       return size.width;
     }
