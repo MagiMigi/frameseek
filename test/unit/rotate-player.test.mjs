@@ -339,22 +339,31 @@ function clickEvent() {
   return ev;
 }
 
-test('a double click on an arrow cannot reach the page under it', () => {
+test('a double click on an arrow cannot reach the page under it', async () => {
+  // A popup closes on a click outside its card, from Instagram's own window listener, so the
+  // second click must land on FrameSeek's own element where the arrow was.
   const { row, video } = reelsPage();
   const rot = attach(video, {});
+  const host = row.children.find((c) => c.shadowRoot);
+  const shield = host.shadowRoot.children.find((c) => c.attrs.class === 'shield');
+  assert.ok(shield, 'a shield element exists');
+  assert.equal(shield.style.getPropertyValue('display'), 'none');
   const btn = arrowOf(row, 'l');
-  btn.rect = { left: 680, top: 10, width: 30, height: 30 };
+  btn.rect = { left: 680, top: 10, width: 30, height: 30 }; // frame top-left is (709, 16)
   btn.dispatchEvent(clickEvent());
-  const shields = [...(winListeners.dblclick ?? [])];
-  assert.ok(shields.length > 0, 'a shield listens for the second click');
-  const hit = (x, y) => {
-    let stopped = false;
-    const ev = { clientX: x, clientY: y, composedPath: () => [], stopPropagation: () => { stopped = true; }, preventDefault() {} };
-    for (const fn of shields) fn(ev);
-    return stopped;
+  assert.equal(shield.style.getPropertyValue('display'), 'block');
+  assert.equal(shield.style.getPropertyValue('left'), '-33px');
+  assert.equal(shield.style.getPropertyValue('top'), '-10px');
+  assert.equal(shield.style.getPropertyValue('width'), '38px');
+  const ev = new Event('dblclick');
+  let stopped = false;
+  ev.stopPropagation = () => {
+    stopped = true;
   };
-  assert.equal(hit(695, 25), true, 'where the arrow was');
-  assert.equal(hit(1000, 500), false, 'elsewhere');
+  shield.dispatchEvent(ev);
+  assert.equal(stopped, true, 'the second click stops at the shield');
+  await new Promise((r) => setTimeout(r, 560));
+  assert.equal(shield.style.getPropertyValue('display'), 'none', 'gone after half a second');
   rot.destroy();
 });
 
