@@ -91,20 +91,23 @@
 
   // ---- the player ------------------------------------------------------------
 
-  // Resolves true when `type` fires, false on an error or after `ms`.
+  // Resolves true when `type` fires, false on an error, when the player is released
+  // (`emptied`) or after `ms`.
   function waitFor(el, type, ms) {
     return new Promise((resolve) => {
       const done = (ok) => {
         clearTimeout(timer);
         el.removeEventListener(type, onOk);
-        el.removeEventListener('error', onError);
+        el.removeEventListener('error', onFail);
+        el.removeEventListener('emptied', onFail);
         resolve(ok);
       };
       const onOk = () => done(true);
-      const onError = () => done(false);
+      const onFail = () => done(false);
       const timer = setTimeout(() => done(false), ms);
       el.addEventListener(type, onOk);
-      el.addEventListener('error', onError);
+      el.addEventListener('error', onFail);
+      el.addEventListener('emptied', onFail);
     });
   }
 
@@ -123,6 +126,7 @@
       this.box.setAttribute('aria-hidden', 'true');
       container.append(this.box);
       this.player = null;
+      this.pending = new Set(); // candidate players still loading or being checked
       this.known = null; // the confirmed file, kept across a release: { url, check: false }
       this.matchedDuration = 0;
       this.state = 'idle'; // 'idle' | 'matching' | 'ready' | 'none'
@@ -200,6 +204,8 @@
       this.releaseTimer = 0;
       if (this.player) release(this.player);
       this.player = null;
+      for (const p of this.pending) release(p);
+      this.pending.clear();
       this.seeking = false;
       this.shownAt = null;
       this.box.classList.remove('show');
@@ -210,19 +216,31 @@
       const gen = this.gen;
       this.state = 'matching';
       const duration = this.main.duration;
-      const candidates = this.known ? [this.known] : globalThis.FrameSeekSources.candidatesFor(this.main);
+      const usedKnown = Boolean(this.known);
+      const candidates = usedKnown ? [this.known] : globalThis.FrameSeekSources.candidatesFor(this.main);
       const result = await pickSource(candidates, {
         open: (url, check) => this.open(url, check, gen),
         reference: () => this.reference(),
         frameAt: (player, time) => this.frameAt(player, time),
-        close: release,
+        close: (player) => {
+          this.pending.delete(player);
+          release(player);
+        },
       });
+      if (result && typeof result === 'object') this.pending.delete(result.player);
       if (gen !== this.gen) {
         if (result && typeof result === 'object') release(result.player);
         return;
       }
       if (result === 'retry') {
         this.state = 'idle'; // try again on the next hover
+        return;
+      }
+      if (!result && usedKnown) {
+        // The remembered file no longer loads (its signed URL may have expired):
+        // look for it in the list again on the next hover.
+        this.known = null;
+        this.state = 'idle';
         return;
       }
       if (!result) {
@@ -247,9 +265,11 @@
       p.disablePictureInPicture = true;
       p.preload = 'metadata';
       if (check) p.crossOrigin = 'anonymous'; // so its frames can be compared
+      this.pending.add(p);
       p.src = url;
       const ok = await waitFor(p, 'loadedmetadata', OPEN_TIMEOUT_MS);
       if (!ok || gen !== this.gen) {
+        this.pending.delete(p);
         release(p);
         return null;
       }
