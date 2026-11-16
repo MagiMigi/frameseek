@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 await import('../../src/content/preview.js');
-const { frameDiff, frameSpread, boxSize, boxLeft, pickSource, MATCH_MAX_DIFF, MIN_SPREAD } = globalThis.FrameSeekPreview;
+const { frameDiff, frameSpread, boxSize, boxLeft, pickSource, turnedAspect, MATCH_MAX_DIFF, MIN_SPREAD } = globalThis.FrameSeekPreview;
 
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 0.1, `${actual} is not about ${expected}`);
 
@@ -25,6 +25,13 @@ test('boxSize fits portrait and landscape videos', () => {
   near(landscape.width, 150.4);
   near(landscape.height, 84.6);
   assert.equal(boxSize(150, 100, 0.5625).width, 80);
+});
+
+test('turnedAspect swaps for quarter turns', () => {
+  near(turnedAspect(0.5625, 1), 1.7778);
+  near(turnedAspect(0.5625, 3), 1.7778);
+  near(turnedAspect(0.5625, 2), 0.5625);
+  near(turnedAspect(0.5625, 0), 0.5625);
 });
 
 test('boxLeft keeps the box inside', () => {

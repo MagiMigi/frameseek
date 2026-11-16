@@ -69,6 +69,16 @@
     return clamp(centerX - width / 2, EDGE, rootW - width - EDGE);
   }
 
+  // Turn buttons (rotate.js): quarter turns 0–3, ↻ adding one. The same table as rotate.js,
+  // which loads after this file.
+  const ANGLES = [0, 90, 180, -90];
+  const isQuarterTurn = (turns) => turns % 2 === 1;
+
+  // A quarter turn swaps the picture's sides.
+  function turnedAspect(aspect, turns) {
+    return isQuarterTurn(turns) ? 1 / aspect : aspect;
+  }
+
   // Tries the candidates in order and returns the first one that is this video's file:
   // { player, candidate }, 'retry' when the real video has no usable frame to compare
   // with yet, or null when none matches. Players that don't match are closed.
@@ -140,6 +150,8 @@
       this.shownAt = null; // the time the player last landed on
       this.releaseTimer = 0;
       this.layout = null;
+      this.boxNow = null; // the box's current size: { width, height }
+      this.turns = 0; // how the main video is turned (turn buttons)
       this.canvas = null;
       this.ctx = null;
       this.destroyed = false;
@@ -179,12 +191,37 @@
       if (!this.layout) return;
       const { centerX, bottom, rootW, rootH } = this.layout;
       const src = this.player?.videoWidth ? this.player : this.main;
-      const { width, height } = boxSize(rootW, rootH, src.videoWidth / src.videoHeight);
+      const { width, height } = boxSize(rootW, rootH, turnedAspect(src.videoWidth / src.videoHeight, this.turns));
       const s = this.box.style;
       s.width = `${width}px`;
       s.height = `${height}px`;
       s.left = `${boxLeft(centerX, width, rootW)}px`;
       s.bottom = `${bottom}px`;
+      this.boxNow = { width, height };
+      this.orientPlayer();
+    }
+
+    // Follow the main video's turn (turn buttons).
+    setTurns(turns) {
+      this.turns = turns;
+      this.applyLayout();
+      if (!this.layout) this.orientPlayer();
+    }
+
+    // Turned a quarter, the player keeps its upright shape (box height × box width) and
+    // turns about the box's centre, so it fills the wide box.
+    orientPlayer() {
+      const p = this.player;
+      if (!p) return;
+      const s = p.style;
+      const quarter = isQuarterTurn(this.turns) && this.boxNow;
+      s.position = quarter ? 'absolute' : '';
+      s.left = quarter ? '50%' : '';
+      s.top = quarter ? '50%' : '';
+      s.width = quarter ? `${this.boxNow.height}px` : '';
+      s.height = quarter ? `${this.boxNow.width}px` : '';
+      if (quarter) s.transform = `translate(-50%, -50%) rotate(${ANGLES[this.turns]}deg)`;
+      else s.transform = this.turns === 2 ? 'rotate(180deg)' : '';
     }
 
     // The main video's source changed, or the preview was turned off.
@@ -366,6 +403,7 @@
     frameSpread,
     boxSize,
     boxLeft,
+    turnedAspect,
     pickSource,
     Preview,
   });

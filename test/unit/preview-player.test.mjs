@@ -164,6 +164,22 @@ test('a remembered file that no longer loads falls back to the list', async () =
   preview.destroy();
 });
 
+test('a turned preview rotates its player and uses a landscape box', async () => {
+  candidates = [{ url: 'turned', check: true }];
+  const preview = new Preview(makeMain(), new FakeEl());
+  preview.hover(3);
+  await tick();
+  assert.equal(preview.state, 'ready');
+  preview.setTurns(3);
+  preview.place(500, 80, 1000, 600);
+  const box = preview.box.style;
+  assert.ok(parseFloat(box.width) > parseFloat(box.height), `box ${box.width} × ${box.height} should be wide`);
+  assert.match(preview.player.style.transform, /rotate\(-90deg\)/);
+  preview.setTurns(0);
+  assert.equal(preview.player.style.transform, '');
+  preview.destroy();
+});
+
 test('no frame check while the real video is still seeking', async () => {
   candidates = [{ url: 'during-seek', check: true }];
   const main = makeMain();

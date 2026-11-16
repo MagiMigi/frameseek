@@ -363,6 +363,7 @@
       this.releaseTimer = 0;
       this.releaseClick = false; // the click of a hold's release is still to come
       this.preview = null; // created on the first hover over the bar while hover preview is on
+      this.turns = 0; // quarter turns from the turn buttons; the hover preview follows them
 
       this.build();
       this.mount();
@@ -649,11 +650,20 @@
       this.preview?.place(x, rr.height - this.tip.offsetTop + PREVIEW_GAP, rr.width, rr.height);
     }
 
+    // The turn buttons turned the video (0–3 quarter turns): turn the hover preview too.
+    setTurns(turns) {
+      this.turns = turns;
+      this.preview?.setTurns(turns);
+    }
+
     // Hover preview follows the mouse over the bar, but not a drag: the video itself
     // shows the frame then. Touch has no hover.
     previewAt(e) {
       if (!this.settings.hoverPreview || e.pointerType !== 'mouse' || this.dragging || !this.duration) return;
-      this.preview ??= new Preview(this.video, this.root);
+      if (!this.preview) {
+        this.preview = new Preview(this.video, this.root);
+        this.preview.setTurns(this.turns);
+      }
       this.preview.hover(this.timeAt(e.clientX));
     }
 
