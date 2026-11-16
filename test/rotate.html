@@ -65,7 +65,7 @@
     <div class="column">
       <div class="cardparent">
         <div class="post-row" id="post-row">
-          <div class="pframe">
+          <div class="pframe" style="flex-basis: 270px; max-width: 270px; aspect-ratio: 9 / 16;">
             <div class="inner"><video id="post-video" muted loop playsinline autoplay preload="auto"></video></div>
           </div>
           <div class="panel">
@@ -145,8 +145,14 @@
       postVideo.setAttribute('style', 'display: block;');
       for (const l of ['Like', 'Comment', 'Share']) document.getElementById('post-icons').append(icon(l));
       const postRow = document.getElementById('post-row');
+      // Instagram's own listeners on the card: a click reaching the video or the comments
+      // after an arrow click (the second click of a double click) would pause or like.
       for (const type of ['click', 'dblclick', 'pointerdown']) {
-        postRow.addEventListener(type, (e) => { if (e.target === postRow) log(`card ${type} leaked`); });
+        postRow.addEventListener(type, (e) => {
+          if (e.target === postRow) log(`card ${type} leaked`);
+          else if (postRow.querySelector('.pframe').contains(e.target)) log(`card video got ${type}`);
+          else if (postRow.querySelector('.panel').contains(e.target)) log(`comments got ${type}`);
+        });
       }
 
       // Like a React re-render: a fresh frame element (Instagram's own styles only) takes

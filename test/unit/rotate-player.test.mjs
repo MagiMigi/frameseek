@@ -51,9 +51,22 @@ class FakeNode extends EventTarget {
   get offsetParent() {
     return this.parentElement;
   }
+  // Layout honours an inline px width/height, unless this node resists (as a page whose
+  // CSS forces its own size would).
   getBoundingClientRect() {
-    const { left, top, width, height } = this.rect;
+    const { left, top } = this.rect;
+    let { width, height } = this.rect;
+    if (!this.resists) {
+      const w = parseFloat(this.style.getPropertyValue('width'));
+      const h = parseFloat(this.style.getPropertyValue('height'));
+      if (this.style.getPropertyValue('width').endsWith('px') && w >= 0) width = w;
+      if (this.style.getPropertyValue('height').endsWith('px') && h >= 0) height = h;
+    }
     return { left, top, width, height, right: left + width, bottom: top + height };
+  }
+  closest(sel) {
+    for (let n = this; n; n = n.parentElement) if (n.matches?.(sel)) return n;
+    return null;
   }
   setAttribute(k, v) {
     this.attrs[k] = String(v);
@@ -124,8 +137,13 @@ globalThis.innerHeight = 901;
 globalThis.matchMedia = () => ({ matches: true }); // reduced motion: no transitions in these tests
 globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
-globalThis.addEventListener = () => {};
-globalThis.removeEventListener = () => {};
+// Window listeners, so tests can fire scroll events and inspect capture-phase shields.
+const winListeners = {};
+globalThis.addEventListener = (type, fn) => (winListeners[type] ||= new Set()).add(fn);
+globalThis.removeEventListener = (type, fn) => winListeners[type]?.delete(fn);
+const tick = async (n = 5) => {
+  for (let i = 0; i < n; i++) await new Promise((r) => setTimeout(r, 0));
+};
 
 await import('../../src/content/rotate.js');
 const { attach } = globalThis.FrameSeekRotate;
@@ -188,7 +206,7 @@ test('with motion, the transitions are gone once the turn back has run', async (
     const before = texts([row, frame, wrapper, video]);
     const rot = attach(video, {});
     rot.turn(-1);
-    assert.match(frame.style.getPropertyValue('transition'), /width/);
+    assert.match(frame.style.getPropertyValue('transition-property'), /width/);
     rot.turn(1);
     await new Promise((r) => setTimeout(r, 400));
     assert.deepEqual(texts([row, frame, wrapper, video]), before);
@@ -244,8 +262,8 @@ test("the post card is capped by the page's width, not the window's", () => {
     const rot = attach(video, {});
     assert.ok(rot, 'the post layout is recognised');
     rot.turn(-1);
-    // 700 − 2 × 72 (navigation) − 300 (comments) = 256
-    assert.equal(frame.style.getPropertyValue('width'), '256px');
+    // Card centred at 350 on a 700 px page: 2 × 350 − 2 × 24 = 652 for the card, 352 for the video.
+    assert.equal(frame.style.getPropertyValue('width'), '352px');
     rot.destroy();
   } finally {
     delete globalThis.document.documentElement;
@@ -255,19 +273,123 @@ test("the post card is capped by the page's width, not the window's", () => {
 test('ensure re-applies the turn when the page width changed without a resize event', () => {
   const doc = { clientWidth: 1920 };
   globalThis.document.documentElement = doc;
+  // Move the card so it is centred at x, as the page's layout would.
+  const centreAt = (nodes, x) => {
+    const dx = x - (nodes.row.rect.left + nodes.row.rect.width / 2);
+    for (const n of [nodes.row, nodes.frame, nodes.video, nodes.side]) n.rect = { ...n.rect, left: n.rect.left + dx };
+  };
   try {
-    const { frame, video } = postPage();
+    const nodes = postPage();
+    nodes.side = nodes.row.children[1];
+    centreAt(nodes, 960);
+    const { frame, video } = nodes;
     const rot = attach(video, {});
     rot.turn(-1);
     const wide = frame.style.getPropertyValue('width');
     doc.clientWidth = 700;
+    centreAt(nodes, 350);
     assert.equal(rot.ensure(), true);
-    assert.equal(frame.style.getPropertyValue('width'), '256px');
-    assert.notEqual(wide, '256px');
+    assert.equal(frame.style.getPropertyValue('width'), '352px');
+    assert.notEqual(wide, '352px');
     rot.destroy();
   } finally {
     delete globalThis.document.documentElement;
   }
+});
+
+const arrowOf = (row, cls) => row.children.find((c) => c.shadowRoot).shadowRoot.children.find((c) => c.attrs.class === cls);
+function clickEvent() {
+  const ev = new Event('click');
+  Object.defineProperty(ev, 'detail', { value: 1 });
+  return ev;
+}
+
+test('a double click on an arrow cannot reach the page under it', () => {
+  const { row, video } = reelsPage();
+  const rot = attach(video, {});
+  const btn = arrowOf(row, 'l');
+  btn.rect = { left: 680, top: 10, width: 30, height: 30 };
+  btn.dispatchEvent(clickEvent());
+  const shields = [...(winListeners.dblclick ?? [])];
+  assert.ok(shields.length > 0, 'a shield listens for the second click');
+  const hit = (x, y) => {
+    let stopped = false;
+    const ev = { clientX: x, clientY: y, composedPath: () => [], stopPropagation: () => { stopped = true; }, preventDefault() {} };
+    for (const fn of shields) fn(ev);
+    return stopped;
+  };
+  assert.equal(hit(695, 25), true, 'where the arrow was');
+  assert.equal(hit(1000, 500), false, 'elsewhere');
+  rot.destroy();
+});
+
+test("the popup frame keeps Instagram's own flex-basis", () => {
+  const { frame, video } = postPage();
+  frame.style.setProperty('flex-basis', '270px');
+  frame.style.setProperty('max-width', '270px');
+  frame.style.setProperty('aspect-ratio', '9 / 16');
+  const before = frame.style.text;
+  const rot = attach(video, {});
+  rot.turn(-1);
+  assert.equal(frame.style.getPropertyValue('flex'), '', 'no flex shorthand');
+  assert.equal(frame.style.getPropertyValue('flex-basis'), 'auto');
+  rot.turn(1);
+  assert.equal(frame.style.text, before);
+  rot.destroy();
+});
+
+test('the post card fits beside a wide navigation column', () => {
+  globalThis.document.documentElement = { clientWidth: 1536 };
+  try {
+    // A 244 px navigation column; the card is centred in the content to its right.
+    const page = new FakeNode('div', { rect: { left: 0, top: 0, width: 1536, height: 864 } });
+    page.root = true;
+    const main = new FakeNode('main', { rect: { left: 244, top: 0, width: 1292, height: 864 } });
+    const row = new FakeNode('div', { rect: { left: 597, top: 36, width: 659, height: 576 }, computed: { display: 'flex' } });
+    const frame = new FakeNode('div', { rect: { left: 597, top: 36, width: 324, height: 576 } });
+    const video = new FakeNode('video', { rect: { left: 597, top: 36, width: 324, height: 576 } });
+    const side = new FakeNode('div', { rect: { left: 921, top: 36, width: 335, height: 576 } });
+    side.append(new FakeNode('svg', { attrs: { 'aria-label': 'Like' } }), new FakeNode('form'));
+    frame.append(video);
+    row.append(frame, side);
+    main.append(row);
+    page.append(main);
+    const rot = attach(video, {});
+    rot.turn(-1);
+    // Centre 926.5: 2 × min(926.5 − 244, 1536 − 926.5) − 2 × 24 = 1171 for the card, 836 for the video.
+    assert.equal(Math.round(parseFloat(frame.style.getPropertyValue('width'))), 836);
+    rot.destroy();
+  } finally {
+    delete globalThis.document.documentElement;
+  }
+});
+
+test("a card that won't widen is put back and loses its arrows", () => {
+  const { row, frame, video } = postPage();
+  frame.resists = true;
+  const before = frame.style.text;
+  const changes = [];
+  const rot = attach(video, { onChange: (t) => changes.push(t) });
+  rot.turn(-1);
+  assert.equal(frame.style.text, before);
+  assert.equal(rot.turns, 0);
+  assert.equal(row.children.some((c) => c.shadowRoot), false, 'no arrows');
+  assert.equal(rot.ensure(), true, 'stays attached, inert');
+  assert.equal(row.children.some((c) => c.shadowRoot), false, 'still no arrows');
+  assert.deepEqual(changes, [3, 0]);
+  rot.destroy();
+});
+
+test('the arrows follow a scroll', async () => {
+  const { row, frame, video } = reelsPage();
+  const rot = attach(video, {});
+  const host = row.children.find((c) => c.shadowRoot);
+  const top = host.style.getPropertyValue('top');
+  frame.rect = { ...frame.rect, top: frame.rect.top - 200 };
+  for (const fn of winListeners.scroll ?? []) fn(new Event('scroll'));
+  await tick();
+  assert.notEqual(host.style.getPropertyValue('top'), top);
+  rot.destroy();
 });
 
 test('no arrows on stories or for an unknown layout', () => {

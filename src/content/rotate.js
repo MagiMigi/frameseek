@@ -39,32 +39,43 @@
 
   // Sets inline styles with !important and remembers what each property was before, so
   // restore() can put every one of them back exactly (value and priority), newest first.
+  // React writes inline styles too (style.x = v replaces ours): a property that no longer
+  // holds what FrameSeek wrote belongs to Instagram again, and is left as it is.
   class StyleLedger {
     constructor() {
-      this.entries = []; // { el, prop, value, priority }
+      // { el, prop, value, priority, ours, oursPriority }
+      this.entries = [];
     }
 
     get size() {
       return this.entries.length;
     }
 
+    static holdsOurs(e) {
+      return e.el.style.getPropertyValue(e.prop) === e.ours && e.el.style.getPropertyPriority(e.prop) === e.oursPriority;
+    }
+
     set(el, prop, value) {
-      if (!this.entries.some((e) => e.el === el && e.prop === prop)) {
-        this.entries.push({
-          el,
-          prop,
-          value: el.style.getPropertyValue(prop),
-          priority: el.style.getPropertyPriority(prop),
-        });
+      let entry = this.entries.find((e) => e.el === el && e.prop === prop);
+      if (!entry) {
+        entry = { el, prop };
+        this.entries.push(entry);
+      }
+      if (!('ours' in entry) || !StyleLedger.holdsOurs(entry)) {
+        entry.value = el.style.getPropertyValue(prop);
+        entry.priority = el.style.getPropertyPriority(prop);
       }
       el.style.setProperty(prop, value, 'important');
+      entry.ours = el.style.getPropertyValue(prop);
+      entry.oursPriority = el.style.getPropertyPriority(prop);
     }
 
     restore() {
       for (let i = this.entries.length - 1; i >= 0; i--) {
-        const { el, prop, value, priority } = this.entries[i];
-        if (value) el.style.setProperty(prop, value, priority);
-        else el.style.removeProperty(prop);
+        const e = this.entries[i];
+        if (!StyleLedger.holdsOurs(e)) continue;
+        if (e.value) e.el.style.setProperty(e.prop, e.value, e.priority);
+        else e.el.style.removeProperty(e.prop);
       }
       this.entries = [];
     }
@@ -73,10 +84,13 @@
   // ---- the Rotator --------------------------------------------------------------
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
-  const MOTION = '0.3s ease';
+  const MOTION_S = '0.3s';
   const MOTION_MS = 320;
   const SIDE_MIN_PX = 40; // a real neighbour, not a zero-width spacer
-  const NAV_PX = 72; // Instagram's left navigation column
+  const EDGE_GAP = 24; // room kept between a turned card and the content area's edges
+  const POPUP_ROW_SLACK = 100; // a post row this much wider than its card is a popup's
+  const SHIELD_MS = 500; // a double click's second click comes within this (OS default)
+  const SHIELD_PAD = 4;
   const ARROW_PX = 30;
   const ARROW_OUT = 27; // how far an arrow reaches out past the corner
   const ARROW_UP = 6;
@@ -197,9 +211,18 @@
         clearTimeout(this.resizeTimer);
         this.resizeTimer = setTimeout(() => this.reapply(), RESIZE_SETTLE_MS);
       };
+      // The arrow host may be placed against a box outside a scrolling list.
+      this.onScroll = () => {
+        if (this.scrollFrame) return;
+        this.scrollFrame = requestAnimationFrame(() => {
+          this.scrollFrame = 0;
+          this.place();
+        });
+      };
       video.addEventListener('emptied', this.onEmptied);
       video.addEventListener('durationchange', this.onDurationChange);
       addEventListener('resize', this.onResize);
+      addEventListener('scroll', this.onScroll, { capture: true, passive: true });
       this.ensure();
     }
 
@@ -219,18 +242,23 @@
       for (const type of SWALLOWED) {
         for (const b of [this.btnL, this.btnR]) b.addEventListener(type, (e) => e.stopPropagation());
       }
-      const click = (dir) => (e) => {
+      const click = (dir, button) => (e) => {
+        const was = button.getBoundingClientRect();
         this.turn(dir);
-        if (e.detail > 0) e.currentTarget.blur(); // a mouse click shouldn't leave a focus ring
+        if (e.detail > 0) {
+          button.blur(); // a mouse click shouldn't leave a focus ring
+          this.shield(was);
+        }
       };
-      this.btnL.addEventListener('click', click(-1));
-      this.btnR.addEventListener('click', click(1));
+      this.btnL.addEventListener('click', click(-1, this.btnL));
+      this.btnR.addEventListener('click', click(1, this.btnR));
     }
 
     // False when Instagram replaced the frame or moved the video: the caller then
     // destroys this Rotator and attaches a new one.
     ensure() {
       if (!this.frame.isConnected || !this.frame.contains(this.video) || this.frame.parentElement !== this.row) return false;
+      if (this.disabled) return true; // the page wouldn't take a turn: no arrows for this video
       if (this.host.parentElement !== this.row) this.row.appendChild(this.host);
       // The page can change width without a resize event (a scrollbar appearing).
       if (this.turns && pageWidth() !== this.appliedWidth) this.reapply();
@@ -246,8 +274,8 @@
         this.turnedDuration = this.video.duration;
       }
       this.turns = next;
+      this.onChange(next);
       this.apply(true);
-      this.onChange(this.turns);
     }
 
     reset() {
@@ -262,12 +290,59 @@
 
     destroy() {
       this.reset();
+      this.unshield();
       cancelAnimationFrame(this.followFrame);
+      cancelAnimationFrame(this.scrollFrame);
       clearTimeout(this.resizeTimer);
+      clearTimeout(this.verifyTimer);
       this.video.removeEventListener('emptied', this.onEmptied);
       this.video.removeEventListener('durationchange', this.onDurationChange);
       removeEventListener('resize', this.onResize);
+      removeEventListener('scroll', this.onScroll, { capture: true });
       this.host.remove();
+    }
+
+    // The page wouldn't take the turned size: put everything back and stop offering the
+    // arrows for this video. A broken card is worse than no turn.
+    disable() {
+      this.disabled = true;
+      this.turns = 0;
+      clearTimeout(this.motionTimer);
+      clearTimeout(this.verifyTimer);
+      this.shape.restore();
+      this.motion.restore();
+      this.unshield();
+      this.host.remove();
+      this.onChange(0);
+    }
+
+    // After a click the arrows move with the frame, so the second click of a double click
+    // would land on Instagram's video or comments. Swallow clicks there for a moment.
+    shield(r) {
+      this.unshield();
+      const until = performance.now() + SHIELD_MS;
+      const box = { left: r.left - SHIELD_PAD, right: r.right + SHIELD_PAD, top: r.top - SHIELD_PAD, bottom: r.bottom + SHIELD_PAD };
+      this.shieldFn = (e) => {
+        if (performance.now() > until) {
+          this.unshield();
+          return;
+        }
+        if (e.composedPath?.().includes(this.host)) return; // an arrow at its new place
+        const p = e.changedTouches?.[0] ?? e;
+        if (p.clientX >= box.left && p.clientX <= box.right && p.clientY >= box.top && p.clientY <= box.bottom) {
+          e.stopPropagation();
+          e.preventDefault?.();
+        }
+      };
+      for (const type of SWALLOWED) addEventListener(type, this.shieldFn, true);
+      this.shieldTimer = setTimeout(() => this.unshield(), SHIELD_MS);
+    }
+
+    unshield() {
+      clearTimeout(this.shieldTimer);
+      if (!this.shieldFn) return;
+      for (const type of SWALLOWED) removeEventListener(type, this.shieldFn, true);
+      this.shieldFn = null;
     }
 
     // The frame's upright size. The Reels page sets it on the frame as --x-width/--x-height.
@@ -289,34 +364,68 @@
 
     apply(animate) {
       clearTimeout(this.motionTimer);
+      clearTimeout(this.verifyTimer);
       const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-      if (animate && !reduced) this.addMotion();
+      const moving = animate && !reduced;
+      if (moving) this.addMotion();
       this.shape.restore();
       this.appliedWidth = pageWidth();
       if (this.turns) {
         try {
           if (isQuarter(this.turns)) {
-            if (this.kind === 'reels') this.shapeReels();
-            else this.shapePost();
+            const width = this.kind === 'reels' ? this.shapeReels() : this.shapePost();
+            // Check once the frame has reached its new size.
+            if (moving) this.verifyTimer = setTimeout(() => this.verify(width), MOTION_MS);
+            else this.verify(width);
           } else {
             this.shape.set(this.video, 'transform', `rotate(${angleFor(this.turns)}deg)`);
           }
         } catch {
           // Something about the page was unexpected: stay upright rather than half turned.
-          this.shape.restore();
-          this.turns = 0;
+          this.disable();
+          return;
         }
       } else if (this.motion.size) {
         // Turning back: let the transitions run, then drop them too.
         this.motionTimer = setTimeout(() => this.motion.restore(), MOTION_MS);
       }
-      this.follow(animate && !reduced ? MOTION_MS : 0);
+      this.follow(moving ? MOTION_MS : 0);
     }
 
+    // The frame took the turned width and the card still ends inside the page.
+    verify(width) {
+      if (this.disabled || !isQuarter(this.turns)) return;
+      const fr = this.frame.getBoundingClientRect();
+      const sr = this.side.getBoundingClientRect();
+      if (Math.abs(fr.width - width) > 2 || sr.right > pageWidth() + 1) this.disable();
+    }
+
+    // Longhands only: a shorthand such as `flex` would wipe Instagram's own inline
+    // `flex-basis` when it is put back.
     addMotion() {
-      this.motion.set(this.frame, 'transition', `width ${MOTION}, height ${MOTION}`);
-      this.motion.set(this.row, 'transition', `margin ${MOTION}, width ${MOTION}`);
-      this.motion.set(this.video, 'transition', `transform ${MOTION}, width ${MOTION}, height ${MOTION}`);
+      const m = (el, props) => {
+        this.motion.set(el, 'transition-property', props);
+        this.motion.set(el, 'transition-duration', MOTION_S);
+        this.motion.set(el, 'transition-timing-function', 'ease');
+      };
+      m(this.frame, 'width, height');
+      m(this.row, 'margin-top, margin-bottom, margin-left, margin-right, width');
+      m(this.video, 'transform, width, height');
+    }
+
+    // How wide the turned box may get: centred where it is, inside the content area
+    // (right of Instagram's navigation, however wide that is) and inside the page. A
+    // popup's row spans its own room, so it caps the card too.
+    room(rect, uprightCardWidth) {
+      const area = this.row.closest?.('main')?.getBoundingClientRect();
+      const left = Math.max(0, area ? area.left : 0);
+      const right = Math.min(pageWidth(), area ? area.right : pageWidth());
+      const centre = rect.left + rect.width / 2;
+      let room = 2 * Math.min(centre - left, right - centre) - 2 * EDGE_GAP;
+      // The popup's row spans the dialog, far wider than its card: that is the card's room.
+      const rowW = this.row.getBoundingClientRect().width;
+      if (this.kind === 'post' && rowW > uprightCardWidth + POPUP_ROW_SLACK) room = Math.min(room, rowW);
+      return Math.max(0, room);
     }
 
     // The video keeps its upright shape (picture height × picture width) and is turned
@@ -336,14 +445,18 @@
     shapeReels() {
       const { w, h } = this.upright;
       const sideW = this.side.getBoundingClientRect().width;
-      const size = reelsSize({ w, h, maxWidth: pageWidth() - 2 * (NAV_PX + sideW + 16) });
+      // The like column on the right, and as much again for the caption on the left.
+      const maxWidth = this.room(this.frame.getBoundingClientRect(), w + sideW) - 2 * (sideW + 16);
+      const size = reelsSize({ w, h, maxWidth });
       const f = (p, v) => this.shape.set(this.frame, p, v);
       f('width', `${size.width}px`);
       f('height', `${size.height}px`);
       f('max-width', 'none');
       f('max-height', 'none');
       f('align-self', 'center');
-      f('flex', 'none');
+      f('flex-grow', '0');
+      f('flex-shrink', '0');
+      f('flex-basis', 'auto');
       // Keep the reel's slot as tall as before, so the next reel doesn't slide up.
       const pad = `${Math.max(0, (h - size.height) / 2)}px`;
       this.shape.set(this.row, 'margin-top', pad);
@@ -353,19 +466,23 @@
         if (el.style?.getPropertyValue('--x-height')) this.shape.set(el, '--x-height', `${size.height}px`);
       }
       this.turnVideo(size.width, size.height);
+      return size.width;
     }
 
     shapePost() {
       const { w, h } = this.upright;
       const panel = this.side.getBoundingClientRect().width;
-      const size = postSize({ w, h, panelWidth: panel, maxCardWidth: pageWidth() - 2 * NAV_PX });
+      const maxCardWidth = this.room(this.row.getBoundingClientRect(), w + panel);
+      const size = postSize({ w, h, panelWidth: panel, maxCardWidth });
       const f = (p, v) => this.shape.set(this.frame, p, v);
       f('width', `${size.width}px`);
       f('height', `${h}px`);
       f('max-width', 'none');
       f('max-height', 'none');
       f('aspect-ratio', 'auto');
-      f('flex', 'none');
+      f('flex-grow', '0');
+      f('flex-shrink', '0');
+      f('flex-basis', 'auto');
       // The card widens past its column when its row is too narrow (single reel and post
       // pages); the popup's row already spans the window and just re-centres.
       const rowW = this.row.getBoundingClientRect().width;
@@ -379,6 +496,7 @@
         this.shape.set(this.row, 'margin-right', half);
       }
       this.turnVideo(size.width, size.height);
+      return size.width;
     }
 
     // Arrow colour from Instagram's own icons beside the video, so it follows the theme.

@@ -66,6 +66,26 @@ class FakeStyle {
   }
 }
 
+test('StyleLedger keeps a value someone else wrote while it was set', () => {
+  // React writes style.x = v, which replaces our !important value.
+  const el = { style: new FakeStyle({ '--x-height': ['869px'] }) };
+  const ledger = new StyleLedger();
+  ledger.set(el, '--x-height', '487px');
+  el.style.setProperty('--x-height', '420px');
+  ledger.restore();
+  assert.equal(el.style.getPropertyValue('--x-height'), '420px');
+});
+
+test('StyleLedger set takes a value written from outside as the new previous one', () => {
+  const el = { style: new FakeStyle({ width: ['100px'] }) };
+  const ledger = new StyleLedger();
+  ledger.set(el, 'width', '300px');
+  el.style.setProperty('width', '120px'); // Instagram resized it meanwhile
+  ledger.set(el, 'width', '310px');
+  ledger.restore();
+  assert.equal(el.style.getPropertyValue('width'), '120px');
+});
+
 test('StyleLedger restores the exact inline styles', () => {
   const el = { style: new FakeStyle({ '--x-height': ['869px'], display: ['block', 'important'] }) };
   const ledger = new StyleLedger();
