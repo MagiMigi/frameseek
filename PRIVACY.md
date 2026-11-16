@@ -16,7 +16,7 @@ FrameSeek is a browser extension that adds a seek bar, skip shortcuts and playba
 
 FrameSeek saves only its own settings, using your browser's extension storage:
 - whether it is on
-- whether keyboard shortcuts, the speed controls, hold for 2×, looping and hover preview are on
+- whether keyboard shortcuts, the speed controls, hold for 2×, looping, hover preview and the turn buttons are on
 - your skip length
 - your last playback speed
 
