@@ -6,6 +6,7 @@
 
   const { getSettings, setSettings, onSettingsChanged, DEFAULTS } = globalThis.FrameSeekSettings;
   const { SeekBar } = globalThis.FrameSeek;
+  const Sources = globalThis.FrameSeekSources;
 
   const MIN_WIDTH = 200; // skip hover previews and thumbnails
   const MIN_HEIGHT = 150;
@@ -146,9 +147,16 @@
     e.stopImmediatePropagation();
   }
 
+  // Hover preview watches the page's fetched files only while it is turned on.
+  function syncSources() {
+    if (settings.enabled && settings.hoverPreview) Sources.start();
+    else Sources.stop();
+  }
+
   function applySettings(next) {
     const wasEnabled = settings.enabled;
     settings = next;
+    syncSources();
     if (!settings.enabled) {
       destroyAll({ resetSpeed: wasEnabled });
       return;
@@ -159,6 +167,7 @@
 
   async function start() {
     settings = await getSettings();
+    syncSources();
     onSettingsChanged(applySettings);
     new MutationObserver(queueScan).observe(document.documentElement, { childList: true, subtree: true });
     setInterval(queueScan, RESCAN_MS);
