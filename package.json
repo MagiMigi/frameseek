@@ -9,6 +9,7 @@
     "icons": "node scripts/make-icons.mjs",
     "package": "node scripts/package.mjs",
     "serve": "node scripts/serve.mjs",
+    "test": "node --test test/unit/*.test.mjs",
     "lint": "npx --yes web-ext@8 lint --source-dir . --ignore-files \"test/**\" \"scripts/**\" \"store/**\" \"dist/**\" \"package.json\" \"*.md\""
   }
 }

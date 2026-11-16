@@ -19,12 +19,13 @@
     speed: 1,
     showLoop: false,
     holdSpeed: true,
+    hoverPreview: false,
   });
 
   function sanitize(raw) {
     const s = { ...DEFAULTS };
     if (!raw || typeof raw !== 'object') return s;
-    for (const key of ['enabled', 'keyboard', 'showSpeed', 'rememberSpeed', 'showLoop', 'holdSpeed']) {
+    for (const key of ['enabled', 'keyboard', 'showSpeed', 'rememberSpeed', 'showLoop', 'holdSpeed', 'hoverPreview']) {
       if (typeof raw[key] === 'boolean') s[key] = raw[key];
     }
     if (SKIP_CHOICES.includes(raw.skipSeconds)) s.skipSeconds = raw.skipSeconds;
