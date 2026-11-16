@@ -5,6 +5,7 @@
   'use strict';
 
   const { SPEEDS } = globalThis.FrameSeekSettings;
+  const { Preview, CSS: PREVIEW_CSS } = globalThis.FrameSeekPreview;
   const CLICK_SPEEDS = [0.5, 1, 1.25, 1.5, 2];
   const ZONE_PX = 72; // bottom strip of the video that reveals the time/speed controls
   const ZONE_MARGIN = 16; // how far the strip reaches above the pills when they're lifted
@@ -12,6 +13,7 @@
   const SIZE_TOLERANCE = 4;
   const SEEK_SETTLE_MS = 250;
   const FLASH_MS = 650;
+  const PREVIEW_GAP = 6; // between the hover preview and the time label under it
   const TOUCH_ZONE_MS = 3000;
   const DEFAULT_FRAME = 1 / 30; // most Reels are 30fps; measured per video when possible
   const COMMON_FPS = [24, 25, 30, 48, 50, 60];
@@ -360,6 +362,7 @@
       this.hold = null;
       this.releaseTimer = 0;
       this.releaseClick = false; // the click of a hold's release is still to come
+      this.preview = null; // created on the first hover over the bar while hover preview is on
 
       this.build();
       this.mount();
@@ -381,7 +384,7 @@
 
       const shadow = this.host.attachShadow({ mode: 'open' });
       const style = document.createElement('style');
-      style.textContent = CSS;
+      style.textContent = CSS + PREVIEW_CSS;
 
       this.root = h('div', 'root no-duration');
       this.flashEl = h('div', 'flash', { 'aria-hidden': 'true' });
@@ -512,6 +515,10 @@
       this.speedBtn.hidden = !settings.showSpeed;
       this.repeatBtn.hidden = this.story || !settings.showLoop;
       if (!settings.holdSpeed) this.cancelHold();
+      if (!settings.hoverPreview && this.preview) {
+        this.preview.destroy();
+        this.preview = null;
+      }
       if (!settings.showSpeed) {
         // No speed control on screen, so don't leave a video playing at a changed speed.
         if (this.desiredRate !== null) {
@@ -540,6 +547,8 @@
       clearTimeout(this.flashTimer);
       clearTimeout(this.zoneTimer);
       this.stopFrameProbe();
+      this.preview?.destroy();
+      this.preview = null;
       this.io.disconnect();
       for (const [type, fn] of this.videoListeners) this.video.removeEventListener(type, fn);
       if (resetSpeed && this.desiredRate !== null) {
@@ -579,6 +588,8 @@
       const dur = this.duration;
       this.root.classList.toggle('no-duration', !dur);
       if (!dur) return;
+      // A new length means Instagram put another video in this element.
+      if (this.preview?.matchedDuration && Math.abs(dur - this.preview.matchedDuration) > 0.5) this.preview.reset();
 
       const repeatKey = this.repeat ? `${this.repeat.start}|${this.repeat.end}|${dur}` : `off|${dur}`;
       if (repeatKey !== this.lastRepeatKey) {
@@ -633,6 +644,15 @@
       const half = this.tip.offsetWidth / 2;
       const x = clamp(tr.left + p * tr.width - rr.left, half + 4, rr.width - half - 4);
       this.tip.style.left = `${x}px`;
+      this.preview?.place(x, rr.height - this.tip.offsetTop + PREVIEW_GAP, rr.width, rr.height);
+    }
+
+    // Hover preview follows the mouse over the bar, but not a drag: the video itself
+    // shows the frame then. Touch has no hover.
+    previewAt(e) {
+      if (!this.settings.hoverPreview || e.pointerType !== 'mouse' || this.dragging || !this.duration) return;
+      this.preview ??= new Preview(this.video, this.root);
+      this.preview.hover(this.timeAt(e.clientX));
     }
 
     // ---- seeking -------------------------------------------------------------
@@ -910,6 +930,7 @@
       this.cancelHold();
       this.repeat = null;
       this.stopFrameProbe();
+      this.preview?.reset();
       this.frameDuration = DEFAULT_FRAME;
       this.frameSamples = [];
       this.lastMediaTime = null;
@@ -944,6 +965,7 @@
       e.preventDefault();
       this.dragging = true;
       this.root.classList.add('dragging');
+      this.preview?.hide();
       // A story moves on by itself when its time is up, so hold it still while dragging
       // (like Instagram's own press-and-hold) and carry on playing after.
       if (this.story && !this.video.paused) {
@@ -960,6 +982,7 @@
     };
 
     onHitMove = (e) => {
+      this.previewAt(e);
       this.showTip(e.clientX);
       if (this.dragging) this.dragTo(e.clientX);
     };
@@ -976,11 +999,13 @@
 
     onHitEnter = (e) => {
       this.root.classList.add('hover-bar');
+      this.previewAt(e);
       this.showTip(e.clientX);
     };
 
     onHitLeave = () => {
       this.root.classList.remove('hover-bar');
+      this.preview?.leave();
     };
 
     dragTo(clientX) {
