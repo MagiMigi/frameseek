@@ -7,6 +7,7 @@
   const { getSettings, setSettings, onSettingsChanged, DEFAULTS } = globalThis.FrameSeekSettings;
   const { SeekBar } = globalThis.FrameSeek;
   const Sources = globalThis.FrameSeekSources;
+  const Rotate = globalThis.FrameSeekRotate;
 
   const MIN_WIDTH = 200; // skip hover previews and thumbnails
   const MIN_HEIGHT = 150;
@@ -16,8 +17,11 @@
   // The stories viewer shows the previous/next stories as smaller cards beside the main
   // one; only videos at least this share of the largest video's area get a bar there.
   const STORY_MAIN_SHARE = 0.5;
+  const LAYOUT_RETRY_MS = 2000; // how often to look again at a video whose layout isn't known
 
   const bars = new Map(); // HTMLVideoElement -> SeekBar
+  const rotators = new Map(); // HTMLVideoElement -> turn buttons (FrameSeekRotate)
+  const noLayoutAt = new WeakMap(); // HTMLVideoElement -> when its layout was last not recognised
   let settings = { ...DEFAULTS };
   let scanQueued = false;
 
@@ -62,9 +66,40 @@
         bars.set(video, new SeekBar(video, settings, { onSpeedChange, story }));
       }
     }
+    syncRotators();
+  }
+
+  // Turn buttons for each video that has a seek bar and sits in a layout FrameSeek
+  // recognises (the Reels page, or a post card with comments beside the video).
+  function syncRotators() {
+    for (const [video, rot] of rotators) {
+      const bar = bars.get(video);
+      if (!bar || !settings.turnButtons || !rot.ensure()) {
+        rot.destroy();
+        rotators.delete(video);
+        bar?.setTurns?.(0);
+      }
+    }
+    if (!settings.turnButtons) return;
+    const now = performance.now();
+    for (const [video, bar] of bars) {
+      if (rotators.has(video) || now - (noLayoutAt.get(video) ?? -Infinity) < LAYOUT_RETRY_MS) continue;
+      const rot = Rotate.attach(video, { onChange: (turns) => bar.setTurns?.(turns) });
+      if (rot) rotators.set(video, rot);
+      else noLayoutAt.set(video, now);
+    }
+  }
+
+  function destroyRotators() {
+    for (const [video, rot] of rotators) {
+      rot.destroy();
+      bars.get(video)?.setTurns?.(0);
+    }
+    rotators.clear();
   }
 
   function destroyAll(options) {
+    destroyRotators();
     for (const bar of bars.values()) bar.destroy(options);
     bars.clear();
   }
@@ -157,6 +192,7 @@
     const wasEnabled = settings.enabled;
     settings = next;
     syncSources();
+    if (!settings.turnButtons) destroyRotators();
     if (!settings.enabled) {
       destroyAll({ resetSpeed: wasEnabled });
       return;
