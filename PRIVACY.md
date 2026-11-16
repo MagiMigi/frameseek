@@ -1,6 +1,6 @@
 # FrameSeek Privacy Policy
 
-_Last updated: October 20, 2026_
+_Last updated: November 16, 2026_
 
 FrameSeek is a browser extension that adds a seek bar, skip shortcuts and playback speed controls to videos on instagram.com.
 
@@ -9,14 +9,14 @@ FrameSeek is a browser extension that adds a seek bar, skip shortcuts and playba
 **Nothing.** FrameSeek does not collect, store, transmit, sell or share any personal or usage data.
 
 - No analytics, tracking, telemetry or advertising.
-- No network requests of any kind. The extension contains no code that talks to a server.
+- No network requests except for hover preview, which is off by default. When you turn it on, hovering over the seek bar makes your browser load a low-quality copy of that video from Instagram's own servers, the same ones Instagram's player uses, to show the frame under your mouse. Nothing is sent anywhere else and nothing is saved.
 - It does not read your messages, posts, account details or browsing history.
 
 ## What is stored on your device
 
 FrameSeek saves only its own settings, using your browser's extension storage:
 - whether it is on
-- whether keyboard shortcuts, the speed controls and looping are on
+- whether keyboard shortcuts, the speed controls, hold for 2×, looping and hover preview are on
 - your skip length
 - your last playback speed
 
