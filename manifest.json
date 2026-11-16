@@ -23,7 +23,7 @@
   "content_scripts": [
     {
       "matches": ["https://www.instagram.com/*"],
-      "js": ["src/shared/settings.js", "src/content/sources.js", "src/content/preview.js", "src/content/seekbar.js", "src/content/content.js"],
+      "js": ["src/shared/settings.js", "src/content/sources.js", "src/content/preview.js", "src/content/seekbar.js", "src/content/rotate.js", "src/content/content.js"],
       "run_at": "document_idle"
     }
   ],
