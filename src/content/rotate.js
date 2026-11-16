@@ -375,7 +375,7 @@
           if (isQuarter(this.turns)) {
             const width = this.kind === 'reels' ? this.shapeReels() : this.shapePost();
             // Check once the frame has reached its new size.
-            if (moving) this.verifyTimer = setTimeout(() => this.verify(width), MOTION_MS);
+            if (moving) this.verifyWhenStill(width);
             else this.verify(width);
           } else {
             this.shape.set(this.video, 'transform', `rotate(${angleFor(this.turns)}deg)`);
@@ -390,6 +390,19 @@
         this.motionTimer = setTimeout(() => this.motion.restore(), MOTION_MS);
       }
       this.follow(moving ? MOTION_MS : 0);
+    }
+
+    // A window that isn't being drawn (in the background, covered) doesn't run the
+    // transition, so the frame can stay at its old size for a long time. Only judge the
+    // size once nothing on the frame is animating.
+    verifyWhenStill(width) {
+      clearTimeout(this.verifyTimer);
+      const check = () => {
+        const moving = this.frame.getAnimations?.().some((a) => a.playState === 'running');
+        if (moving) this.verifyTimer = setTimeout(check, MOTION_MS);
+        else this.verify(width);
+      };
+      this.verifyTimer = setTimeout(check, MOTION_MS);
     }
 
     // The frame took the turned width and the card still ends inside the page.

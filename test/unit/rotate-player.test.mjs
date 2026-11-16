@@ -56,7 +56,7 @@ class FakeNode extends EventTarget {
   getBoundingClientRect() {
     const { left, top } = this.rect;
     let { width, height } = this.rect;
-    if (!this.resists) {
+    if (!this.resists && !this.animating) {
       const w = parseFloat(this.style.getPropertyValue('width'));
       const h = parseFloat(this.style.getPropertyValue('height'));
       if (this.style.getPropertyValue('width').endsWith('px') && w >= 0) width = w;
@@ -67,6 +67,10 @@ class FakeNode extends EventTarget {
   closest(sel) {
     for (let n = this; n; n = n.parentElement) if (n.matches?.(sel)) return n;
     return null;
+  }
+  // While `animating`, a transition is still running (or the window isn't being drawn).
+  getAnimations() {
+    return this.animating ? [{ playState: 'running' }] : [];
   }
   setAttribute(k, v) {
     this.attrs[k] = String(v);
@@ -210,6 +214,25 @@ test('with motion, the transitions are gone once the turn back has run', async (
     rot.turn(1);
     await new Promise((r) => setTimeout(r, 400));
     assert.deepEqual(texts([row, frame, wrapper, video]), before);
+    rot.destroy();
+  } finally {
+    globalThis.matchMedia = () => ({ matches: true });
+  }
+});
+
+test('the size check waits for the turn to finish animating', async () => {
+  globalThis.matchMedia = () => ({ matches: false });
+  try {
+    const { row, frame, video } = reelsPage();
+    frame.animating = true; // the frame is still growing (or the window isn't being drawn)
+    const rot = attach(video, {});
+    rot.turn(-1);
+    await new Promise((r) => setTimeout(r, 700));
+    assert.equal(rot.turns, 3, 'not given up while still animating');
+    assert.ok(row.children.some((c) => c.shadowRoot), 'arrows kept');
+    frame.animating = false;
+    await new Promise((r) => setTimeout(r, 400));
+    assert.equal(rot.turns, 3, 'the finished size passes the check');
     rot.destroy();
   } finally {
     globalThis.matchMedia = () => ({ matches: true });
