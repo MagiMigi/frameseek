@@ -8,7 +8,10 @@ const tick = async (n = 10) => {
 
 // How each fake file behaves: 'ok' loads and seeks, 'error' fails, 'hang' never loads.
 const files = {};
+// How much a file's frames differ from the real video's (0 = the same picture).
+const shifts = {};
 const opened = [];
+let draws = []; // every source drawn for a frame check
 
 class FakeEl extends EventTarget {
   constructor() {
@@ -41,6 +44,9 @@ class FakeVideo extends FakeEl {
     this.readyState = 0;
     this.videoWidth = 0;
     this.videoHeight = 0;
+    this.seeking = false;
+    this.flat = false; // shows a frame with no detail, like a black screen
+    this.shift = 0;
     this.released = false;
   }
   get src() {
@@ -48,6 +54,7 @@ class FakeVideo extends FakeEl {
   }
   set src(url) {
     this._src = url;
+    this.shift = shifts[url] ?? 0;
     opened.push(url);
     setTimeout(() => {
       if (this._src !== url) return;
@@ -87,16 +94,32 @@ globalThis.document = {
       return v;
     }
     if (tag === 'canvas') {
-      // Every frame looks the same and has plenty of detail, so any loaded file matches.
-      const data = Uint8ClampedArray.from({ length: 16 * 16 * 4 }, (_, i) => (i * 7) % 200);
-      return { getContext: () => ({ drawImage() {}, getImageData: () => ({ data }) }) };
+      // A detailed frame, shifted by the source's `shift`, or flat for a `flat` source.
+      let last = null;
+      return {
+        getContext: () => ({
+          drawImage(source) {
+            last = source;
+            draws.push(source);
+          },
+          getImageData: () => ({
+            data: Uint8ClampedArray.from({ length: 16 * 16 * 4 }, (_, i) =>
+              last.flat ? 50 : ((i * 7) % 200) + last.shift,
+            ),
+          }),
+        }),
+      };
     }
     return new FakeEl();
   },
 };
 
-let candidates = [];
-globalThis.FrameSeekSources = { candidatesFor: () => candidates, version: () => 1 };
+let candidates = []; // a list, or a function returning one
+let version = 1;
+globalThis.FrameSeekSources = {
+  candidatesFor: () => (typeof candidates === 'function' ? candidates() : candidates),
+  version: () => version,
+};
 
 await import('../../src/content/preview.js');
 const { Preview } = globalThis.FrameSeekPreview;
@@ -138,5 +161,75 @@ test('a remembered file that no longer loads falls back to the list', async () =
   await tick();
   assert.ok(opened.includes('fresh'), `opened ${JSON.stringify(opened)}`);
   assert.equal(preview.state, 'ready');
+  preview.destroy();
+});
+
+test('no frame check while the real video is still seeking', async () => {
+  candidates = [{ url: 'during-seek', check: true }];
+  const main = makeMain();
+  main.seeking = true; // its picture may still be the old frame
+  const preview = new Preview(main, new FakeEl());
+  opened.length = 0;
+  preview.hover(3);
+  await tick();
+  assert.deepEqual(opened, []);
+  assert.equal(preview.state, 'idle');
+  preview.destroy();
+});
+
+test('a file listed while a check runs is tried on the next hover', async () => {
+  shifts.wrong = 60;
+  let calls = 0;
+  candidates = () => {
+    calls++;
+    if (calls > 1) return [{ url: 'right', check: true }];
+    setTimeout(() => {
+      version++; // the right file shows up in the list while 'wrong' is being checked
+    }, 0);
+    return [{ url: 'wrong', check: true }];
+  };
+  const preview = new Preview(makeMain(), new FakeEl());
+  preview.hover(3);
+  await tick();
+  assert.equal(preview.state, 'none');
+  preview.hover(4);
+  await tick();
+  assert.equal(preview.state, 'ready');
+  preview.destroy();
+});
+
+test('an error while matching does not leave the preview stuck', async () => {
+  let calls = 0;
+  candidates = () => {
+    calls++;
+    if (calls === 1) throw new Error('unexpected');
+    return [{ url: 'after-error', check: true }];
+  };
+  const preview = new Preview(makeMain(), new FakeEl());
+  preview.hover(3);
+  await tick();
+  assert.notEqual(preview.state, 'matching');
+  await new Promise((r) => setTimeout(r, 350)); // past the retry gap
+  preview.hover(4);
+  await tick();
+  assert.equal(preview.state, 'ready');
+  preview.destroy();
+});
+
+test('a flat frame is checked again at most every 300 ms', async () => {
+  candidates = [{ url: 'later', check: true }];
+  const main = makeMain();
+  main.flat = true;
+  const preview = new Preview(main, new FakeEl());
+  draws = [];
+  for (let i = 0; i < 4; i++) {
+    preview.hover(3 + i * 0.1);
+    await tick(2);
+  }
+  assert.equal(draws.filter((s) => s === main).length, 1);
+  await new Promise((r) => setTimeout(r, 350));
+  preview.hover(4);
+  await tick(2);
+  assert.equal(draws.filter((s) => s === main).length, 2);
   preview.destroy();
 });

@@ -16,6 +16,7 @@
   const OPEN_TIMEOUT_MS = 5000; // an expired or blocked file never sends its metadata
   const SEEK_TIMEOUT_MS = 3000;
   const RELEASE_MS = 5000; // drop the file this long after the mouse leaves the bar
+  const RETRY_MS = 300; // while the real video's frame is unusable, look again at most this often
 
   const CSS = `
     .preview {
@@ -131,6 +132,7 @@
       this.matchedDuration = 0;
       this.state = 'idle'; // 'idle' | 'matching' | 'ready' | 'none'
       this.noneVersion = -1; // the source list's version when nothing matched
+      this.retryAt = 0; // no new frame check before this time (performance.now())
       this.gen = 0; // bumped by reset/release/destroy, so late results are dropped
       this.hovering = false;
       this.wanted = null;
@@ -150,8 +152,11 @@
       this.hovering = true;
       this.wanted = t;
       if (this.state === 'none' && globalThis.FrameSeekSources.version() !== this.noneVersion) this.state = 'idle';
-      if (this.state === 'idle') this.match();
-      else if (this.state === 'ready') this.seek();
+      if (this.state === 'idle') {
+        if (performance.now() >= this.retryAt) this.match();
+      } else if (this.state === 'ready') {
+        this.seek();
+      }
     }
 
     hide() {
@@ -188,6 +193,7 @@
       this.known = null;
       this.state = 'idle';
       this.matchedDuration = 0;
+      this.retryAt = 0;
     }
 
     destroy() {
@@ -215,8 +221,23 @@
     async match() {
       const gen = this.gen;
       this.state = 'matching';
+      try {
+        await this.tryMatch(gen);
+      } catch {
+        // Something unexpected: drop what was loading and try again on a later hover.
+        if (gen === this.gen) {
+          this.release();
+          this.state = 'idle';
+          this.retryAt = performance.now() + RETRY_MS;
+        }
+      }
+    }
+
+    async tryMatch(gen) {
       const duration = this.main.duration;
       const usedKnown = Boolean(this.known);
+      // Read before looking, so a file listed while this check runs triggers another try.
+      const version = globalThis.FrameSeekSources.version();
       const candidates = usedKnown ? [this.known] : globalThis.FrameSeekSources.candidatesFor(this.main);
       const result = await pickSource(candidates, {
         open: (url, check) => this.open(url, check, gen),
@@ -233,7 +254,8 @@
         return;
       }
       if (result === 'retry') {
-        this.state = 'idle'; // try again on the next hover
+        this.state = 'idle'; // try again on a later hover
+        this.retryAt = performance.now() + RETRY_MS;
         return;
       }
       if (!result && usedKnown) {
@@ -245,7 +267,7 @@
       }
       if (!result) {
         this.state = 'none';
-        this.noneVersion = globalThis.FrameSeekSources.version();
+        this.noneVersion = version;
         return;
       }
       this.player = result.player;
@@ -278,7 +300,8 @@
 
     reference() {
       const v = this.main;
-      if (v.readyState < 2 || !v.videoWidth) return null;
+      // While seeking, the picture can still be the old frame although currentTime is new.
+      if (v.readyState < 2 || !v.videoWidth || v.seeking) return null;
       const grey = this.greyOf(v);
       return grey && { grey, time: v.currentTime };
     }

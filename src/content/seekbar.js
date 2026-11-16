@@ -454,6 +454,8 @@
       this.restorePosition = null;
       this.mountEl = null;
       this.host.remove();
+      // The mouse may never "leave" a bar that was taken off the page.
+      this.preview?.leave();
     }
 
     // Instagram re-renders a lot; put the bar back if our host got detached or moved away.
