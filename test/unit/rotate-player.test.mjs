@@ -340,30 +340,36 @@ function clickEvent() {
 }
 
 test('a double click on an arrow cannot reach the page under it', async () => {
-  // A popup closes on a click outside its card, from Instagram's own window listener, so the
-  // second click must land on FrameSeek's own element where the arrow was.
+  // After the first click the arrow moves with the frame: the second click must not reach
+  // Instagram's video, comments, or a popup's backdrop (which closes the popup). Everything
+  // at the old spot is swallowed for half a second, the arrow's own events included, since
+  // a press that starts on the arrow can end on the page as the arrow moves away.
   const { row, video } = reelsPage();
   const rot = attach(video, {});
   const host = row.children.find((c) => c.shadowRoot);
-  const shield = host.shadowRoot.children.find((c) => c.attrs.class === 'shield');
-  assert.ok(shield, 'a shield element exists');
-  assert.equal(shield.style.getPropertyValue('display'), 'none');
   const btn = arrowOf(row, 'l');
-  btn.rect = { left: 680, top: 10, width: 30, height: 30 }; // frame top-left is (709, 16)
+  btn.rect = { left: 680, top: 10, width: 30, height: 30 };
   btn.dispatchEvent(clickEvent());
-  assert.equal(shield.style.getPropertyValue('display'), 'block');
-  assert.equal(shield.style.getPropertyValue('left'), '-33px');
-  assert.equal(shield.style.getPropertyValue('top'), '-10px');
-  assert.equal(shield.style.getPropertyValue('width'), '38px');
-  const ev = new Event('dblclick');
-  let stopped = false;
-  ev.stopPropagation = () => {
-    stopped = true;
+  const shields = () => [...(winListeners.pointerdown ?? [])];
+  assert.ok(shields().length > 0, 'a shield listens on the window');
+  const hit = (x, y, path = []) => {
+    let stopped = false;
+    const ev = {
+      clientX: x,
+      clientY: y,
+      composedPath: () => path,
+      stopImmediatePropagation: () => { stopped = true; },
+      stopPropagation() {},
+      preventDefault() {},
+    };
+    for (const fn of shields()) fn(ev);
+    return stopped;
   };
-  shield.dispatchEvent(ev);
-  assert.equal(stopped, true, 'the second click stops at the shield');
+  assert.equal(hit(695, 25), true, 'where the arrow was');
+  assert.equal(hit(695, 25, [host]), true, 'even on the arrow itself');
+  assert.equal(hit(1000, 500), false, 'elsewhere');
   await new Promise((r) => setTimeout(r, 560));
-  assert.equal(shield.style.getPropertyValue('display'), 'none', 'gone after half a second');
+  assert.equal(shields().length, 0, 'gone after half a second');
   rot.destroy();
 });
 

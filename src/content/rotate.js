@@ -126,7 +126,6 @@
     button:hover { opacity: 1; }
     button:focus-visible { outline: 2px solid #ff3d5a; outline-offset: 2px; border-radius: 6px; opacity: 1; }
     .l { left: -${ARROW_OUT}px; }
-    .shield { position: absolute; pointer-events: auto; background: transparent; cursor: default; }
     svg { display: block; width: 100%; height: 100%; overflow: visible; }
     path { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
   `;
@@ -239,18 +238,9 @@
       style.textContent = CSS;
       this.btnL = arrowButton('l', 'Turn left', PATH_L);
       this.btnR = arrowButton('r', 'Turn right', PATH_R);
-      // Covers the spot an arrow just left (see shield()); under the arrows, so an arrow
-      // that ends up there again still gets the click.
-      this.shieldEl = document.createElement('div');
-      this.shieldEl.setAttribute('class', 'shield');
-      this.shieldEl.style.setProperty('display', 'none');
-      shadow.append(style, this.shieldEl, this.btnL, this.btnR);
+      shadow.append(style, this.btnL, this.btnR);
       for (const type of SWALLOWED) {
         for (const b of [this.btnL, this.btnR]) b.addEventListener(type, (e) => e.stopPropagation());
-        this.shieldEl.addEventListener(type, (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-        });
       }
       const click = (dir, button) => (e) => {
         const was = button.getBoundingClientRect();
@@ -328,37 +318,29 @@
 
     // After a click the arrows move with the frame, so the second click of a double click
     // would land on whatever is now under the old spot: Instagram's video or comments
-    // (pause, like) or a popup's backdrop (closes the popup, from Instagram's own window
-    // listener). For a moment, FrameSeek's own element covers that spot instead.
+    // (pause, like) or a popup's backdrop (closes the popup). For a moment, every event
+    // at that spot is stopped at the window, before anything else sees it. That includes
+    // the arrow itself: a press that starts on the arrow can end on the page as the arrow
+    // moves away, and the page would get the click. A fast double click is one turn.
     shield(r) {
-      this.shieldRect = {
-        left: r.left - SHIELD_PAD,
-        top: r.top - SHIELD_PAD,
-        width: r.width + 2 * SHIELD_PAD,
-        height: r.height + 2 * SHIELD_PAD,
+      this.unshield();
+      const box = { left: r.left - SHIELD_PAD, right: r.right + SHIELD_PAD, top: r.top - SHIELD_PAD, bottom: r.bottom + SHIELD_PAD };
+      this.shieldFn = (e) => {
+        const p = e.changedTouches?.[0] ?? e;
+        if (p.clientX >= box.left && p.clientX <= box.right && p.clientY >= box.top && p.clientY <= box.bottom) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
       };
-      this.shieldEl.style.setProperty('display', 'block');
-      this.placeShield(this.frame.getBoundingClientRect());
-      clearTimeout(this.shieldTimer);
+      for (const type of SWALLOWED) addEventListener(type, this.shieldFn, true);
       this.shieldTimer = setTimeout(() => this.unshield(), SHIELD_MS);
     }
 
     unshield() {
       clearTimeout(this.shieldTimer);
-      this.shieldRect = null;
-      this.shieldEl.style.setProperty('display', 'none');
-    }
-
-    // The shield stays on the same spot of the screen while the arrow layer (placed at
-    // the frame's top-left) moves with the frame.
-    placeShield(fr) {
-      const r = this.shieldRect;
-      if (!r) return;
-      const s = this.shieldEl.style;
-      s.setProperty('left', `${r.left - fr.left}px`);
-      s.setProperty('top', `${r.top - fr.top}px`);
-      s.setProperty('width', `${r.width}px`);
-      s.setProperty('height', `${r.height}px`);
+      if (!this.shieldFn) return;
+      for (const type of SWALLOWED) removeEventListener(type, this.shieldFn, true);
+      this.shieldFn = null;
     }
 
     // The frame's upright size. The Reels page sets it on the frame as --x-width/--x-height.
@@ -565,7 +547,6 @@
       this.host.style.setProperty('top', `${y}px`, 'important');
       const right = (this.kind === 'post' ? this.side : this.frame).getBoundingClientRect().right;
       this.btnR.style.setProperty('left', `${right - fr.left - ARROW_PX + ARROW_OUT}px`);
-      this.placeShield(fr);
     }
 
     // Keep the arrows on the corners while the frame animates.
