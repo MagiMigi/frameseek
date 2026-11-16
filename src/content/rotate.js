@@ -87,7 +87,10 @@
   const MOTION_S = '0.3s';
   const MOTION_MS = 320;
   const SIDE_MIN_PX = 40; // a real neighbour, not a zero-width spacer
-  const EDGE_GAP = 24; // room kept between a turned card and the content area's edges
+  // Room kept between a turned card and the edges of its space, so the arrows, which reach
+  // 27 px past the card, stay inside it: at a popup's very edge a click goes to the
+  // backdrop and closes the popup.
+  const EDGE_GAP = 48;
   const POPUP_ROW_SLACK = 100; // a post row this much wider than its card is a popup's
   const SHIELD_MS = 500; // a double click's second click comes within this (OS default)
   const SHIELD_PAD = 4;
@@ -435,7 +438,7 @@
       let room = 2 * Math.min(centre - left, right - centre) - 2 * EDGE_GAP;
       // The popup's row spans the dialog, far wider than its card: that is the card's room.
       const rowW = this.row.getBoundingClientRect().width;
-      if (this.kind === 'post' && rowW > uprightCardWidth + POPUP_ROW_SLACK) room = Math.min(room, rowW);
+      if (this.kind === 'post' && rowW > uprightCardWidth + POPUP_ROW_SLACK) room = Math.min(room, rowW - 2 * EDGE_GAP);
       return Math.max(0, room);
     }
 

@@ -297,8 +297,8 @@ test("the post card is capped by the page's width, not the window's", () => {
     const rot = attach(video, {});
     assert.ok(rot, 'the post layout is recognised');
     rot.turn(-1);
-    // Card centred at 350 on a 700 px page: 2 × 350 − 2 × 24 = 652 for the card, 352 for the video.
-    assert.equal(frame.style.getPropertyValue('width'), '352px');
+    // Card centred at 350 on a 700 px page: 2 × 350 − 2 × 48 = 604 for the card, 304 for the video.
+    assert.equal(frame.style.getPropertyValue('width'), '304px');
     rot.destroy();
   } finally {
     delete globalThis.document.documentElement;
@@ -324,8 +324,8 @@ test('ensure re-applies the turn when the page width changed without a resize ev
     doc.clientWidth = 700;
     centreAt(nodes, 350);
     assert.equal(rot.ensure(), true);
-    assert.equal(frame.style.getPropertyValue('width'), '352px');
-    assert.notEqual(wide, '352px');
+    assert.equal(frame.style.getPropertyValue('width'), '304px');
+    assert.notEqual(wide, '304px');
     rot.destroy();
   } finally {
     delete globalThis.document.documentElement;
@@ -388,6 +388,26 @@ test("the popup frame keeps Instagram's own flex-basis", () => {
   rot.destroy();
 });
 
+test("in a popup the turned card leaves room for the arrows inside the popup's row", () => {
+  // The popup's row spans the dialog (1777 px). An arrow reaches 27 px past the card;
+  // right at the row's edge it can't be clicked, and the click closes the popup.
+  const page = new FakeNode('div', { rect: { left: 0, top: 0, width: 1920, height: 901 } });
+  page.root = true;
+  const row = new FakeNode('div', { rect: { left: 64, top: 24, width: 1777, height: 853 }, computed: { display: 'flex' } });
+  const frame = new FakeNode('div', { rect: { left: 463, top: 24, width: 480, height: 853 } });
+  const video = new FakeNode('video', { rect: { left: 463, top: 24, width: 480, height: 853 } });
+  const side = new FakeNode('div', { rect: { left: 942, top: 24, width: 500, height: 853 } });
+  side.append(new FakeNode('svg', { attrs: { 'aria-label': 'Like' } }), new FakeNode('form'));
+  frame.append(video);
+  row.append(frame, side);
+  page.append(row);
+  const rot = attach(video, {});
+  rot.turn(-1);
+  // 1777 − 2 × 48 = 1681 for the card, so 1181 for the video beside the 500 px comments.
+  assert.equal(Math.round(parseFloat(frame.style.getPropertyValue('width'))), 1181);
+  rot.destroy();
+});
+
 test('an aspect-ratio box inside the post frame takes the turned proportion', () => {
   // Signed in, a wrapper keeps the video's 9:16 shape with padding-bottom: 177.778%,
   // which would make it far taller than the widened frame.
@@ -424,8 +444,8 @@ test('the post card fits beside a wide navigation column', () => {
     page.append(main);
     const rot = attach(video, {});
     rot.turn(-1);
-    // Centre 926.5: 2 × min(926.5 − 244, 1536 − 926.5) − 2 × 24 = 1171 for the card, 836 for the video.
-    assert.equal(Math.round(parseFloat(frame.style.getPropertyValue('width'))), 836);
+    // Centre 926.5: 2 × min(926.5 − 244, 1536 − 926.5) − 2 × 48 = 1123 for the card, 788 for the video.
+    assert.equal(Math.round(parseFloat(frame.style.getPropertyValue('width'))), 788);
     rot.destroy();
   } finally {
     delete globalThis.document.documentElement;
