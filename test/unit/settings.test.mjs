@@ -27,3 +27,19 @@ test('hoverPreview ignores non-booleans', async () => {
   stored = { hoverPreview: 'yes' };
   assert.equal((await getSettings()).hoverPreview, false);
 });
+
+test('turnButtons defaults to on', async () => {
+  assert.equal(DEFAULTS.turnButtons, true);
+  stored = {};
+  assert.equal((await getSettings()).turnButtons, true);
+});
+
+test('turnButtons keeps a stored false', async () => {
+  stored = { turnButtons: false };
+  assert.equal((await getSettings()).turnButtons, false);
+});
+
+test('turnButtons ignores non-booleans', async () => {
+  stored = { turnButtons: 0 };
+  assert.equal((await getSettings()).turnButtons, true);
+});
