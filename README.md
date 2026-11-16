@@ -79,7 +79,7 @@ Instagram's class names are random and change often, so the extension only looks
 - **Placement.** Each bar is mounted on the highest wrapper that has the same size as the video. That puts it above Instagram's invisible click overlay.
 - **Clicks.** Clicks on the bar are stopped from reaching Instagram, so seeking doesn't pause or "like" the video.
 - **Seeking.** It sets `video.currentTime`. Instagram streams video through Media Source, and seeking works normally.
-- **Hover preview.** The video's own `blob:` source can't be shared with a second player, so the extension looks in the page's resource timing for the pieces Instagram's player fetched. Their URLs carry a label with the video's ID and length; dropping the byte range gives a file a hidden `<video>` can load whole. A file is only used once a small greyscale copy of its frame matches the real video's frame at the same moment, so a reel of the same length never shows another reel's frames.
+- **Hover preview.** The video's own `blob:` source can't be shared with a second player, so the extension looks in the page's resource timing for the pieces Instagram's player fetched. Their URLs carry a label with the video's ID and length; dropping the byte range gives a file a hidden `<video>` can load whole. A file is only used once a small greyscale copy of its frame matches the real video's frame at the same moment, so a reel of the same length doesn't show another reel's frames.
 
 ## Scripts
 
