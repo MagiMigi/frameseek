@@ -522,6 +522,7 @@
         this.preview.destroy();
         this.preview = null;
       }
+      this.preview?.setSize(settings.previewSize);
       if (!settings.showSpeed) {
         // No speed control on screen, so don't leave a video playing at a changed speed.
         if (this.desiredRate !== null) {
@@ -662,6 +663,7 @@
       if (!this.settings.hoverPreview || e.pointerType !== 'mouse' || this.dragging || !this.duration) return;
       if (!this.preview) {
         this.preview = new Preview(this.video, this.root);
+        this.preview.setSize(this.settings.previewSize);
         this.preview.setTurns(this.turns);
       }
       this.preview.hover(this.timeAt(e.clientX));

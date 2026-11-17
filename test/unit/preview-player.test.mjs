@@ -249,3 +249,36 @@ test('a flat frame is checked again at most every 300 ms', async () => {
   assert.equal(draws.filter((s) => s === main).length, 2);
   preview.destroy();
 });
+
+test('setSize resizes a placed box', async () => {
+  candidates = [{ url: 'sized', check: true }];
+  const preview = new Preview(makeMain(), new FakeEl());
+  preview.hover(3);
+  await tick();
+  preview.place(500, 80, 1000, 600);
+  const medium = parseFloat(preview.box.style.width);
+  preview.setSize('small');
+  const small = parseFloat(preview.box.style.width);
+  assert.ok(Math.abs(small - 0.67 * medium) < 0.1, `small ${small} is not 0.67 × medium ${medium}`);
+  preview.setSize('large');
+  assert.ok(parseFloat(preview.box.style.width) > medium, 'large is bigger than medium');
+  preview.destroy();
+});
+
+test('a smaller preview size gives a smaller turned box', async () => {
+  candidates = [{ url: 'turned-small', check: true }];
+  const preview = new Preview(makeMain(), new FakeEl());
+  preview.hover(3);
+  await tick();
+  preview.setTurns(3);
+  preview.setSize('medium');
+  preview.place(500, 80, 1000, 600);
+  const mediumWidth = parseFloat(preview.box.style.width);
+  preview.setSize('small');
+  preview.place(500, 80, 1000, 600);
+  const box = preview.box.style;
+  assert.ok(parseFloat(box.width) > parseFloat(box.height), `box ${box.width} × ${box.height} should be wide`);
+  assert.ok(parseFloat(box.width) < mediumWidth, 'narrower than at medium');
+  assert.match(preview.player.style.transform, /rotate\(-90deg\)/);
+  preview.destroy();
+});

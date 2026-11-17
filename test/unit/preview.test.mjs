@@ -27,6 +27,19 @@ test('boxSize fits portrait and landscape videos', () => {
   assert.equal(boxSize(150, 100, 0.5625).width, 80);
 });
 
+test('boxSize scales with the preview size', () => {
+  const small = boxSize(487, 869, 0.5625, 0.67);
+  near(small.width, 104.4);
+  near(small.height, 185.6);
+  const medium = boxSize(487, 869, 0.5625);
+  near(medium.width, 155.8);
+  near(medium.height, 277.0);
+  const large = boxSize(487, 869, 0.5625, 1.35);
+  near(large.width, 210.4);
+  near(large.height, 374.0);
+  assert.equal(boxSize(150, 100, 0.5625, 0.67).width, 80, 'never under the 80 px minimum');
+});
+
 test('turnedAspect swaps for quarter turns', () => {
   near(turnedAspect(0.5625, 1), 1.7778);
   near(turnedAspect(0.5625, 3), 1.7778);

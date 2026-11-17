@@ -11,6 +11,8 @@
   // A nearly flat frame (black, white, a fade) would match any other flat frame.
   const MIN_SPREAD = 40;
   const MIN_BOX_WIDTH = 80;
+  // The popup's Preview size: how much of today's box (Medium) each size takes.
+  const PREVIEW_SCALES = Object.freeze({ small: 0.67, medium: 1, large: 1.35 });
   const EDGE = 4;
   const GREY_SIZE = 16;
   const OPEN_TIMEOUT_MS = 5000; // an expired or blocked file never sends its metadata
@@ -59,9 +61,10 @@
     return hi - lo;
   }
 
-  function boxSize(rootW, rootH, aspect) {
+  // Fits within 32% of the video's width and 40% of its height (Medium), times `scale`.
+  function boxSize(rootW, rootH, aspect, scale = 1) {
     const a = aspect > 0 ? aspect : 16 / 9;
-    const width = Math.max(MIN_BOX_WIDTH, Math.min(0.32 * rootW, 0.4 * rootH * a));
+    const width = Math.max(MIN_BOX_WIDTH, Math.min(0.32 * scale * rootW, 0.4 * scale * rootH * a));
     return { width, height: width / a };
   }
 
@@ -152,6 +155,7 @@
       this.layout = null;
       this.boxNow = null; // the box's current size: { width, height }
       this.turns = 0; // how the main video is turned (turn buttons)
+      this.scale = 1; // the popup's Preview size (PREVIEW_SCALES)
       this.canvas = null;
       this.ctx = null;
       this.destroyed = false;
@@ -191,7 +195,7 @@
       if (!this.layout) return;
       const { centerX, bottom, rootW, rootH } = this.layout;
       const src = this.player?.videoWidth ? this.player : this.main;
-      const { width, height } = boxSize(rootW, rootH, turnedAspect(src.videoWidth / src.videoHeight, this.turns));
+      const { width, height } = boxSize(rootW, rootH, turnedAspect(src.videoWidth / src.videoHeight, this.turns), this.scale);
       const s = this.box.style;
       s.width = `${width}px`;
       s.height = `${height}px`;
@@ -199,6 +203,12 @@
       s.bottom = `${bottom}px`;
       this.boxNow = { width, height };
       this.orientPlayer();
+    }
+
+    // The popup's Preview size: 'small', 'medium' or 'large'. A placed box resizes at once.
+    setSize(size) {
+      this.scale = PREVIEW_SCALES[size] ?? 1;
+      this.applyLayout();
     }
 
     // Follow the main video's turn (turn buttons).
@@ -398,6 +408,7 @@
   globalThis.FrameSeekPreview = Object.freeze({
     MATCH_MAX_DIFF,
     MIN_SPREAD,
+    PREVIEW_SCALES,
     CSS,
     frameDiff,
     frameSpread,
