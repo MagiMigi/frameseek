@@ -9,6 +9,7 @@
 
   const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   const SKIP_CHOICES = [1, 2, 3, 4, 5, 10, 15];
+  const PREVIEW_SIZES = ['small', 'medium', 'large'];
 
   const DEFAULTS = Object.freeze({
     enabled: true,
@@ -20,6 +21,7 @@
     showLoop: false,
     holdSpeed: true,
     hoverPreview: false,
+    previewSize: 'medium',
     turnButtons: true,
   });
 
@@ -31,6 +33,7 @@
     }
     if (SKIP_CHOICES.includes(raw.skipSeconds)) s.skipSeconds = raw.skipSeconds;
     if (SPEEDS.includes(raw.speed)) s.speed = raw.speed;
+    if (PREVIEW_SIZES.includes(raw.previewSize)) s.previewSize = raw.previewSize;
     return s;
   }
 
@@ -62,6 +65,7 @@
     DEFAULTS,
     SPEEDS,
     SKIP_CHOICES,
+    PREVIEW_SIZES,
     getSettings,
     setSettings,
     onSettingsChanged,

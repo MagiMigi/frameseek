@@ -15,6 +15,8 @@
     for (const key of TOGGLES) $(key).checked = s[key];
     $('skipSeconds').value = String(s.skipSeconds);
     $('skipLabel').textContent = String(s.skipSeconds);
+    $('previewSize').value = s.previewSize;
+    $('previewSize').disabled = !s.hoverPreview; // nothing to size while the preview is off
     $('options').disabled = !s.enabled;
     $('rememberSpeed').disabled = !s.showSpeed; // nothing to remember without speed controls
     for (const el of document.querySelectorAll('[data-requires]')) el.hidden = !s[el.dataset.requires];
@@ -24,6 +26,7 @@
     $(key).addEventListener('change', (e) => setSettings({ [key]: e.target.checked }));
   }
   $('skipSeconds').addEventListener('change', (e) => setSettings({ skipSeconds: Number(e.target.value) }));
+  $('previewSize').addEventListener('change', (e) => setSettings({ previewSize: e.target.value }));
 
   $('version').textContent = `v${api.runtime.getManifest().version}`;
   getSettings().then(render);

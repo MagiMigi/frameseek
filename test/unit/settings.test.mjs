@@ -43,3 +43,21 @@ test('turnButtons ignores non-booleans', async () => {
   stored = { turnButtons: 0 };
   assert.equal((await getSettings()).turnButtons, true);
 });
+
+test('previewSize defaults to medium', async () => {
+  assert.equal(DEFAULTS.previewSize, 'medium');
+  stored = {};
+  assert.equal((await getSettings()).previewSize, 'medium');
+});
+
+test('previewSize keeps a stored size', async () => {
+  stored = { previewSize: 'small' };
+  assert.equal((await getSettings()).previewSize, 'small');
+});
+
+test('previewSize ignores unknown values', async () => {
+  stored = { previewSize: 'huge' };
+  assert.equal((await getSettings()).previewSize, 'medium');
+  stored = { previewSize: 2 };
+  assert.equal((await getSettings()).previewSize, 'medium');
+});

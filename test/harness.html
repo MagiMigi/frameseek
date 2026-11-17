@@ -167,6 +167,7 @@
         <label><input type="checkbox" data-setting="showLoop" /> loop</label>
         <label><input type="checkbox" data-setting="holdSpeed" /> hold 2×</label>
         <label><input type="checkbox" data-setting="hoverPreview" /> preview</label>
+        <label>size <select data-setting="previewSize"><option value="small">small</option><option value="medium">medium</option><option value="large">large</option></select></label>
         <label><input type="checkbox" data-setting="turnButtons" /> turn</label>
       </div>
       <textarea id="comment" rows="2" placeholder="Type here: arrow keys must move the caret, not seek"></textarea>
@@ -305,8 +306,9 @@
         const current = await FrameSeekSettings.getSettings();
         for (const box of document.querySelectorAll('[data-setting]')) {
           const key = box.dataset.setting;
-          box.checked = current[key];
-          box.addEventListener('change', () => chrome.storage.sync.set({ [key]: box.checked }));
+          const prop = box.tagName === 'SELECT' ? 'value' : 'checked';
+          box[prop] = current[key];
+          box.addEventListener('change', () => chrome.storage.sync.set({ [key]: box[prop] }));
         }
       })();
     </script>

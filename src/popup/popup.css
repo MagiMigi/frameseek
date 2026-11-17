@@ -58,12 +58,12 @@ fieldset {
 }
 
 fieldset:disabled,
-fieldset:not(:disabled) .row:has(input:disabled) {
+fieldset:not(:disabled) .row:has(:is(input, select):disabled) {
   opacity: 0.45;
 }
 
-.row:has(input:disabled),
-.row input:disabled {
+.row:has(:is(input, select):disabled),
+.row :is(input, select):disabled {
   cursor: default;
 }
 
