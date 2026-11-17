@@ -85,9 +85,9 @@ Live listing: https://chromewebstore.google.com/detail/frameseek-video-seek-bar/
    - **Data usage:** tick none of the data types. Tick all three certifications (no selling, no unrelated use, no creditworthiness).
    - **Privacy policy URL:** `https://github.com/MagiMigi/frameseek/blob/main/PRIVACY.md`
 5. **Distribution:** Free, Public, all regions.
-6. **Test instructions** tab: leave the username and password empty (never give reviewers your own Instagram login). Under additional instructions, paste:
+6. **Test instructions** tab: leave the username and password empty (never give reviewers your own Instagram login). Under additional instructions (Chrome limit: 500 characters), paste:
    ```
-   No sign-in needed: open https://www.instagram.com/reels/ (it works signed out). Hover the bottom of a video to show the seek bar, then click or drag it. Keys: left/right arrows skip, J/L skip 10s, comma/period step one frame. Hold the left mouse button on a playing video to play it at 2× until you let go. Speed controls and Loop are off by default: turn them on in the toolbar popup, then use the speed button or < and >, and the A-B button or [ and ] to loop part of a video. Hover preview is off by default too: turn it on in the popup, then hover the seek bar to see the frame under the mouse; "Preview size" in the popup makes it smaller or larger. The curved arrows just outside a reel's top corners turn it a quarter turn left or right. FrameSeek collects no data and makes no network requests unless hover preview is on; it then loads a low-quality copy of the hovered video from Instagram's own servers.
+   No sign-in needed: open https://www.instagram.com/reels/. Hover the bottom of a video for the seek bar, then click or drag it. Keys: ←/→ skip, J/L skip 10s, comma/period step one frame. Hold the mouse on a playing video for 2×. The curved arrows at a reel's top corners turn it a quarter turn. Speed, Loop and Hover preview are off by default; turn them on in the toolbar popup. No data is collected; hover preview loads a low-quality copy of the video from Instagram's own servers.
    ```
 7. **Account** page: turn on email notifications for "item review completed" and "item published", so you hear when the review is done.
 8. Submit for review. It usually takes a few days, longer with the detailed review.
