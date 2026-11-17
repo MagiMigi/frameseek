@@ -37,6 +37,15 @@
     return { width, height: (width * w) / h };
   }
 
+  // How much a vw × vh picture turned by `deg` must shrink to fit inside an fw × fh frame:
+  // 1 when upright, or a quarter turn in a frame of its turned shape, and less partway.
+  function fitScale({ vw, vh, deg, fw, fh }) {
+    const r = (deg * Math.PI) / 180;
+    const c = Math.abs(Math.cos(r));
+    const s = Math.abs(Math.sin(r));
+    return Math.min(1, fw / (vw * c + vh * s), fh / (vw * s + vh * c));
+  }
+
   // Sets inline styles with !important and remembers what each property was before, so
   // restore() can put every one of them back exactly (value and priority), newest first.
   // React writes inline styles too (style.x = v replaces ours): a property that no longer
@@ -84,8 +93,9 @@
   // ---- the Rotator --------------------------------------------------------------
 
   const SVG_NS = 'http://www.w3.org/2000/svg';
-  const MOTION_S = '0.3s';
-  const MOTION_MS = 320;
+  const MOTION_MS = 300;
+  // A window that isn't being drawn runs no animation frames: the turn ends by this anyway.
+  const MOTION_FALLBACK_MS = MOTION_MS + 200;
   const SIDE_MIN_PX = 40; // a real neighbour, not a zero-width spacer
   // Room kept between a turned card and the edges of its space, so the arrows, which reach
   // 27 px past the card, stay inside it: at a popup's very edge a click goes to the
@@ -98,6 +108,11 @@
   const ARROW_OUT = 27; // how far an arrow reaches out past the corner
   const ARROW_UP = 6;
   const RESIZE_SETTLE_MS = 120; // re-apply once the window has stopped changing size
+
+  // Slow at both ends, so the turn starts and lands softly.
+  const ease = (t) => 0.5 - Math.cos(Math.PI * t) / 2;
+  // A turn's shape partway (p from 0 to 1) between two shapes; at 1 exactly the second.
+  const mix = (a, b, p) => Object.fromEntries(Object.keys(b).map((k) => [k, p >= 1 ? b[k] : a[k] + (b[k] - a[k]) * p]));
 
   // The page's own width. innerWidth can count more than the page really has (with
   // zoom or device emulation), which would let a turned card run off the screen.
@@ -196,13 +211,17 @@
       this.side = layout.side;
       this.onChange = options.onChange ?? (() => {});
       this.turns = 0;
-      this.shape = new StyleLedger(); // sizes and positions
-      this.motion = new StyleLedger(); // transitions, removed after the turn back has animated
-      this.upright = null;
+      this.angle = 0; // degrees, counted on across turns so each one turns the short way
+      this.shape = new StyleLedger(); // every inline style a turn sets on Instagram's elements
+      this.upright = null; // the upright layout, measured when a turn starts from upright
+      this.geo = null; // the shape on screen now: null when upright and untouched
+      this.goal = null; // the shape the current turn ends in
+      this.frameId = 0; // the next animation frame while a turn is moving
+      this.fallbackTimer = 0;
+      this.sizedInside = []; // inner wrappers sized from --x-height
+      this.aspectBoxes = []; // [element, padding property] of aspect-ratio boxes
+      this.widening = false; // the post card's row overflows its column while turned
       this.turnedDuration = 0;
-      this.followUntil = 0;
-      this.followFrame = 0;
-      this.motionTimer = 0;
       this.build();
       this.onEmptied = () => this.reset();
       this.onDurationChange = () => {
@@ -263,8 +282,9 @@
       if (!this.frame.isConnected || !this.frame.contains(this.video) || this.frame.parentElement !== this.row) return false;
       if (this.disabled) return true; // the page wouldn't take a turn: no arrows for this video
       if (this.host.parentElement !== this.row) this.row.appendChild(this.host);
-      // The page can change width without a resize event (a scrollbar appearing).
-      if (this.turns && pageWidth() !== this.appliedWidth) this.reapply();
+      // The page can change width without a resize event (a scrollbar appearing). A turn
+      // still moving is left to finish; the next check catches it.
+      if (this.turns && !this.frameId && pageWidth() !== this.appliedWidth) this.reapply();
       this.paint();
       this.place();
       return true;
@@ -273,28 +293,33 @@
     turn(dir) {
       const next = nextTurns(this.turns, dir);
       if (!this.turns) {
+        // Measured upright, also while a turn back is still moving: its styles come off
+        // for the measurement, and the new turn starts from the shape on screen.
+        this.shape.restore();
         this.upright = this.measure();
         this.turnedDuration = this.video.duration;
       }
       this.turns = next;
+      this.angle += dir * 90;
       this.onChange(next);
       this.apply(true);
     }
 
     reset() {
-      if (!this.turns && !this.shape.size && !this.motion.size) return;
+      if (!this.turns && !this.shape.size) return;
+      this.stopMotion();
       this.turns = 0;
-      clearTimeout(this.motionTimer);
+      this.angle = 0;
+      this.geo = null;
       this.shape.restore();
-      this.motion.restore();
       this.place();
       this.onChange(0);
     }
 
     destroy() {
       this.reset();
+      this.stopMotion();
       this.unshield();
-      cancelAnimationFrame(this.followFrame);
       cancelAnimationFrame(this.scrollFrame);
       clearTimeout(this.resizeTimer);
       clearTimeout(this.verifyTimer);
@@ -309,11 +334,12 @@
     // arrows for this video. A broken card is worse than no turn.
     disable() {
       this.disabled = true;
-      this.turns = 0;
-      clearTimeout(this.motionTimer);
+      this.stopMotion();
       clearTimeout(this.verifyTimer);
+      this.turns = 0;
+      this.angle = 0;
+      this.geo = null;
       this.shape.restore();
-      this.motion.restore();
       this.unshield();
       this.host.remove();
       this.onChange(0);
@@ -346,64 +372,134 @@
       this.shieldFn = null;
     }
 
-    // The frame's upright size. The Reels page sets it on the frame as --x-width/--x-height.
+    // The upright layout, read while nothing is turned: the frame's size (the Reels page
+    // sets it on the frame as --x-width/--x-height), the neighbour's and the row's widths,
+    // and how wide the turned box may get.
     measure() {
-      const w = parseFloat(this.frame.style.getPropertyValue('--x-width'));
-      const h = parseFloat(this.frame.style.getPropertyValue('--x-height'));
-      if (this.kind === 'reels' && w > 0 && h > 0) return { w, h };
-      const r = this.frame.getBoundingClientRect();
-      return { w: r.width, h: r.height };
+      const fr = this.frame.getBoundingClientRect();
+      const rr = this.row.getBoundingClientRect();
+      let w = fr.width;
+      let h = fr.height;
+      const xw = parseFloat(this.frame.style.getPropertyValue('--x-width'));
+      const xh = parseFloat(this.frame.style.getPropertyValue('--x-height'));
+      if (this.kind === 'reels' && xw > 0 && xh > 0) {
+        w = xw;
+        h = xh;
+      }
+      const side = this.side.getBoundingClientRect().width;
+      const room = this.room(this.kind === 'reels' ? fr : rr, w + side, rr.width);
+      return { w, h, side, rowW: rr.width, room };
     }
 
-    // After a window resize: measure the upright size again and turn to the same state.
+    // After a window resize: measure the upright layout again and turn to the same state.
     reapply() {
       if (!this.turns) return;
+      this.stopMotion();
       this.shape.restore();
       this.upright = this.measure();
       this.apply(false);
     }
 
+    // The shape of a turn state: the frame's size (fw × fh), the video's own size (vw × vh,
+    // always the upright proportion), its angle, and how the row moves: on the Reels page
+    // margins that keep the reel's slot as tall as before (pad), on the post layout how
+    // much wider the card gets than its column (widen).
+    shapeFor(turns, deg) {
+      const { w, h, side, rowW, room } = this.upright;
+      if (!isQuarter(turns)) return { fw: w, fh: h, vw: w, vh: h, deg, pad: 0, widen: 0 };
+      if (this.kind === 'reels') {
+        // The like column on the right, and as much again for the caption on the left.
+        const size = reelsSize({ w, h, maxWidth: room - 2 * (side + 16) });
+        const pad = Math.max(0, (h - size.height) / 2);
+        return { fw: size.width, fh: size.height, vw: size.height, vh: size.width, deg, pad, widen: 0 };
+      }
+      // The picture keeps the card's height; the popup's row already spans the window, so
+      // only a narrower row (single reel and post pages) needs widening.
+      const size = postSize({ w, h, panelWidth: side, maxCardWidth: room });
+      const needed = size.width + side;
+      const widen = rowW < needed - 1 ? needed - rowW : 0;
+      return { fw: size.width, fh: h, vw: size.height, vh: size.width, deg, pad: 0, widen };
+    }
+
+    // Moves from the shape on screen to the one for this.turns. Every frame of the turn
+    // sets every size, so the frame, the video, the inner wrappers and the row all move
+    // together. CSS transitions can't do that: position, max sizes, aspect-ratio and
+    // custom properties such as --x-height would jump at the start.
     apply(animate) {
-      clearTimeout(this.motionTimer);
+      this.stopMotion();
       clearTimeout(this.verifyTimer);
-      const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-      const moving = animate && !reduced;
-      if (moving) this.addMotion();
-      this.shape.restore();
       this.appliedWidth = pageWidth();
-      if (this.turns) {
+      const from = this.geo ?? this.shapeFor(0, 0);
+      this.goal = this.shapeFor(this.turns, this.angle);
+      this.findSizedInside();
+      const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      if (!animate || reduced) {
+        this.settle();
+        return;
+      }
+      this.widening = from.widen > 0 || this.goal.widen > 0;
+      const start = performance.now();
+      const step = () => {
+        const t = Math.min(1, (performance.now() - start) / MOTION_MS);
+        if (t >= 1) {
+          this.settle();
+          return;
+        }
+        this.geo = mix(from, this.goal, ease(t));
         try {
-          if (isQuarter(this.turns)) {
-            const width = this.kind === 'reels' ? this.shapeReels() : this.shapePost();
-            // Check once the frame has reached its new size.
-            if (moving) this.verifyWhenStill(width);
-            else this.verify(width);
-          } else {
-            this.shape.set(this.video, 'transform', `rotate(${angleFor(this.turns)}deg)`);
-          }
+          this.draw(this.geo);
         } catch {
           // Something about the page was unexpected: stay upright rather than half turned.
           this.disable();
           return;
         }
-      } else if (this.motion.size) {
-        // Turning back: let the transitions run, then drop them too.
-        this.motionTimer = setTimeout(() => this.motion.restore(), MOTION_MS);
-      }
-      this.follow(moving ? MOTION_MS : 0);
+        this.place();
+        this.frameId = requestAnimationFrame(step);
+      };
+      this.fallbackTimer = setTimeout(() => this.settle(), MOTION_FALLBACK_MS);
+      step();
     }
 
-    // A window that isn't being drawn (in the background, covered) doesn't run the
-    // transition, so the frame can stay at its old size for a long time. Only judge the
-    // size once nothing on the frame is animating.
-    verifyWhenStill(width) {
+    stopMotion() {
+      cancelAnimationFrame(this.frameId);
+      clearTimeout(this.fallbackTimer);
+      this.frameId = 0;
+    }
+
+    // Where a turn lands: only the styles that state needs, and a check that the page took
+    // them. Upright, everything is put back; a half turn only turns the video.
+    settle() {
+      this.stopMotion();
+      const goal = this.goal;
+      this.angle = angleFor(this.turns); // four quarter turns the same way are upright again
+      this.shape.restore();
+      this.geo = null;
+      if (this.turns) {
+        this.geo = { ...goal, deg: this.angle };
+        try {
+          if (isQuarter(this.turns)) {
+            this.widening = goal.widen > 0;
+            this.draw(this.geo);
+            this.verifySoon(goal.fw);
+          } else {
+            this.shape.set(this.video, 'transform', `rotate(${this.angle}deg)`);
+          }
+        } catch {
+          this.disable();
+          return;
+        }
+      }
+      this.place();
+    }
+
+    // Judge the size once nothing on the frame is animating (a transition of the page's own).
+    verifySoon(width) {
       clearTimeout(this.verifyTimer);
       const check = () => {
-        const moving = this.frame.getAnimations?.().some((a) => a.playState === 'running');
-        if (moving) this.verifyTimer = setTimeout(check, MOTION_MS);
+        if (this.frame.getAnimations?.().some((a) => a.playState === 'running')) this.verifyTimer = setTimeout(check, MOTION_MS);
         else this.verify(width);
       };
-      this.verifyTimer = setTimeout(check, MOTION_MS);
+      check();
     }
 
     // The frame took the turned width and the card still ends inside the page.
@@ -414,117 +510,83 @@
       if (Math.abs(fr.width - width) > 2 || sr.right > pageWidth() + 1) this.disable();
     }
 
-    // Longhands only: a shorthand such as `flex` would wipe Instagram's own inline
-    // `flex-basis` when it is put back.
-    addMotion() {
-      const m = (el, props) => {
-        this.motion.set(el, 'transition-property', props);
-        this.motion.set(el, 'transition-duration', MOTION_S);
-        this.motion.set(el, 'transition-timing-function', 'ease');
-      };
-      m(this.frame, 'width, height');
-      m(this.row, 'margin-top, margin-bottom, margin-left, margin-right, width');
-      m(this.video, 'transform, width, height');
-    }
-
     // How wide the turned box may get: centred where it is, inside the content area
     // (right of Instagram's navigation, however wide that is) and inside the page. A
     // popup's row spans its own room, so it caps the card too.
-    room(rect, uprightCardWidth) {
+    room(rect, uprightCardWidth, rowW) {
       const area = this.row.closest?.('main')?.getBoundingClientRect();
       const left = Math.max(0, area ? area.left : 0);
       const right = Math.min(pageWidth(), area ? area.right : pageWidth());
       const centre = rect.left + rect.width / 2;
       let room = 2 * Math.min(centre - left, right - centre) - 2 * EDGE_GAP;
       // The popup's row spans the dialog, far wider than its card: that is the card's room.
-      const rowW = this.row.getBoundingClientRect().width;
       if (this.kind === 'post' && rowW > uprightCardWidth + POPUP_ROW_SLACK) room = Math.min(room, rowW - 2 * EDGE_GAP);
       return Math.max(0, room);
     }
 
-    // The video keeps its upright shape (picture height × picture width) and is turned
-    // a quarter about its centre, so it covers a picture × height box exactly.
-    turnVideo(width, height) {
-      const s = (p, v) => this.shape.set(this.video, p, v);
-      s('position', 'absolute');
-      s('width', `${height}px`);
-      s('height', `${width}px`);
-      s('max-width', 'none');
-      s('max-height', 'none');
-      s('left', '50%');
-      s('top', '50%');
-      s('transform', `translate(-50%, -50%) rotate(${angleFor(this.turns)}deg)`);
-    }
-
-    shapeReels() {
-      const { w, h } = this.upright;
-      const sideW = this.side.getBoundingClientRect().width;
-      // The like column on the right, and as much again for the caption on the left.
-      const maxWidth = this.room(this.frame.getBoundingClientRect(), w + sideW) - 2 * (sideW + 16);
-      const size = reelsSize({ w, h, maxWidth });
-      const f = (p, v) => this.shape.set(this.frame, p, v);
-      f('width', `${size.width}px`);
-      f('height', `${size.height}px`);
-      f('max-width', 'none');
-      f('max-height', 'none');
-      f('align-self', 'center');
-      f('flex-grow', '0');
-      f('flex-shrink', '0');
-      f('flex-basis', 'auto');
-      // Keep the reel's slot as tall as before, so the next reel doesn't slide up.
-      const pad = `${Math.max(0, (h - size.height) / 2)}px`;
-      this.shape.set(this.row, 'margin-top', pad);
-      this.shape.set(this.row, 'margin-bottom', pad);
-      // Inner wrappers that size themselves from --x-height (signed in) follow the frame.
-      for (const el of this.frame.querySelectorAll('*')) {
-        // (Skipping FrameSeek's own elements: the seek bar's host resets everything.)
-        if (!el.shadowRoot && el.style?.getPropertyValue('--x-height')) this.shape.set(el, '--x-height', `${size.height}px`);
+    // Elements inside the frame that size themselves: wrappers that read --x-height (the
+    // Reels page, signed in), and aspect-ratio boxes (a percentage padding) between the
+    // frame and the video, which keep the upright 9:16 shape and would make a widened
+    // frame far taller than it is (a black area over the page below).
+    findSizedInside() {
+      this.sizedInside = [];
+      if (this.kind === 'reels') {
+        for (const el of this.frame.querySelectorAll('*')) {
+          // (Skipping FrameSeek's own elements: the seek bar's host resets everything.)
+          if (!el.shadowRoot && el.style?.getPropertyValue('--x-height')) this.sizedInside.push(el);
+        }
       }
-      this.fitAspectBoxes(size.width, size.height);
-      this.turnVideo(size.width, size.height);
-      return size.width;
-    }
-
-    // Aspect-ratio boxes (a percentage padding) between the frame and the video keep the
-    // upright 9:16 shape, so a widened frame would make them far taller than the frame
-    // (a black area over the page below). Give them the turned frame's proportion.
-    fitAspectBoxes(width, height) {
+      this.aspectBoxes = [];
       for (let el = this.video.parentElement; el && el !== this.frame; el = el.parentElement) {
         for (const prop of ['padding-bottom', 'padding-top']) {
-          if (el.style.getPropertyValue(prop).endsWith('%')) this.shape.set(el, prop, `${(height / width) * 100}%`);
+          if (el.style.getPropertyValue(prop).endsWith('%')) this.aspectBoxes.push([el, prop]);
         }
       }
     }
 
-    shapePost() {
-      const { w, h } = this.upright;
-      const panel = this.side.getBoundingClientRect().width;
-      const maxCardWidth = this.room(this.row.getBoundingClientRect(), w + panel);
-      const size = postSize({ w, h, panelWidth: panel, maxCardWidth });
+    // One moment of a turn, or a quarter turn at rest. The frame takes the shape's size.
+    // The video keeps its upright proportion and turns about the frame's centre, shrunk
+    // while partway so that its corners stay inside the frame.
+    draw(g) {
       const f = (p, v) => this.shape.set(this.frame, p, v);
-      f('width', `${size.width}px`);
-      f('height', `${h}px`);
+      const r = (p, v) => this.shape.set(this.row, p, v);
+      f('width', `${g.fw}px`);
+      f('height', `${g.fh}px`);
       f('max-width', 'none');
       f('max-height', 'none');
-      f('aspect-ratio', 'auto');
+      // Longhands only: a shorthand such as `flex` would wipe Instagram's own inline
+      // `flex-basis` when it is put back.
       f('flex-grow', '0');
       f('flex-shrink', '0');
       f('flex-basis', 'auto');
-      // The card widens past its column when its row is too narrow (single reel and post
-      // pages); the popup's row already spans the window and just re-centres.
-      const rowW = this.row.getBoundingClientRect().width;
-      const needed = size.width + panel;
-      if (rowW < needed - 1) {
-        const half = `${-(needed - rowW) / 2}px`;
-        this.shape.set(this.row, 'width', `${needed}px`);
-        this.shape.set(this.row, 'max-width', 'none');
-        this.shape.set(this.row, 'flex-shrink', '0');
-        this.shape.set(this.row, 'margin-left', half);
-        this.shape.set(this.row, 'margin-right', half);
+      if (this.kind === 'reels') {
+        f('align-self', 'center');
+        // Keep the reel's slot as tall as before, so the next reel doesn't slide up.
+        r('margin-top', `${g.pad}px`);
+        r('margin-bottom', `${g.pad}px`);
+        for (const el of this.sizedInside) this.shape.set(el, '--x-height', `${g.fh}px`);
+      } else {
+        f('aspect-ratio', 'auto');
+        if (this.widening) {
+          // The card overflows its column evenly, so the column and the grid below stay.
+          r('width', `${this.upright.rowW + g.widen}px`);
+          r('max-width', 'none');
+          r('flex-shrink', '0');
+          r('margin-left', `${-g.widen / 2}px`);
+          r('margin-right', `${-g.widen / 2}px`);
+        }
       }
-      this.fitAspectBoxes(size.width, h);
-      this.turnVideo(size.width, size.height);
-      return size.width;
+      for (const [el, prop] of this.aspectBoxes) this.shape.set(el, prop, `${(g.fh / g.fw) * 100}%`);
+      const scale = fitScale(g);
+      const v = (p, val) => this.shape.set(this.video, p, val);
+      v('position', 'absolute');
+      v('width', `${g.vw}px`);
+      v('height', `${g.vh}px`);
+      v('max-width', 'none');
+      v('max-height', 'none');
+      v('left', '50%');
+      v('top', '50%');
+      v('transform', `translate(-50%, -50%) rotate(${g.deg}deg)${scale < 0.9995 ? ` scale(${scale})` : ''}`);
     }
 
     // Arrow colour from Instagram's own icons beside the video, so it follows the theme.
@@ -551,17 +613,6 @@
       const right = (this.kind === 'post' ? this.side : this.frame).getBoundingClientRect().right;
       this.btnR.style.setProperty('left', `${right - fr.left - ARROW_PX + ARROW_OUT}px`);
     }
-
-    // Keep the arrows on the corners while the frame animates.
-    follow(ms) {
-      cancelAnimationFrame(this.followFrame);
-      this.followUntil = performance.now() + ms;
-      const step = () => {
-        this.place();
-        if (performance.now() < this.followUntil) this.followFrame = requestAnimationFrame(step);
-      };
-      step();
-    }
   }
 
   function attach(video, options) {
@@ -577,6 +628,7 @@
     classifyRow,
     reelsSize,
     postSize,
+    fitScale,
     StyleLedger,
     findLayout,
     attach,

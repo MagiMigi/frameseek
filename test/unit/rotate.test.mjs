@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 await import('../../src/content/rotate.js');
-const { nextTurns, angleFor, isQuarter, classifyRow, reelsSize, postSize, StyleLedger } = globalThis.FrameSeekRotate;
+const { nextTurns, angleFor, isQuarter, classifyRow, reelsSize, postSize, fitScale, StyleLedger } = globalThis.FrameSeekRotate;
 
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 0.1, `${actual} is not about ${expected}`);
 
@@ -46,6 +46,16 @@ test("postSize keeps the card's height until the window caps it", () => {
   const capped = postSize({ w: 338, h: 601, panelWidth: 335, maxCardWidth: 1200 });
   near(capped.width, 865);
   near(capped.height, 486.5);
+});
+
+test('fitScale shrinks a turning picture just enough to stay inside its frame', () => {
+  const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 0.001, `${actual} is not about ${expected}`);
+  close(fitScale({ vw: 487, vh: 869, deg: 0, fw: 487, fh: 869 }), 1);
+  close(fitScale({ vw: 487, vh: 869, deg: -90, fw: 869, fh: 487 }), 1);
+  close(fitScale({ vw: 487, vh: 869, deg: 180, fw: 487, fh: 869 }), 1);
+  // Halfway: a 487×869 picture at 45° needs a 959 px square, and the frame is 678 px.
+  close(fitScale({ vw: 487, vh: 869, deg: -45, fw: 678, fh: 678 }), 0.7071);
+  assert.equal(fitScale({ vw: 100, vh: 100, deg: 0, fw: 500, fh: 500 }), 1, 'never larger than the picture');
 });
 
 class FakeStyle {

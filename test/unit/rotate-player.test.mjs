@@ -215,20 +215,190 @@ test('turning back restores every inline style exactly', () => {
   rot.destroy();
 });
 
-test('with motion, the transitions are gone once the turn back has run', async () => {
+// With motion on, a clock and animation frames that the test moves on by hand.
+function manualFrames() {
+  let clock = 0;
+  let next = 1;
+  const queue = new Map();
+  const saved = {
+    matchMedia: globalThis.matchMedia,
+    raf: globalThis.requestAnimationFrame,
+    caf: globalThis.cancelAnimationFrame,
+    performance: globalThis.performance,
+  };
   globalThis.matchMedia = () => ({ matches: false });
+  globalThis.requestAnimationFrame = (fn) => {
+    queue.set(next, fn);
+    return next++;
+  };
+  globalThis.cancelAnimationFrame = (id) => queue.delete(id);
+  Object.defineProperty(globalThis, 'performance', { value: { now: () => clock }, configurable: true, writable: true });
+  return {
+    // Moves the clock to `ms` and draws one animation frame.
+    at(ms) {
+      clock = ms;
+      const fns = [...queue.values()];
+      queue.clear();
+      for (const fn of fns) fn(ms);
+    },
+    restore() {
+      globalThis.matchMedia = saved.matchMedia;
+      globalThis.requestAnimationFrame = saved.raf;
+      globalThis.cancelAnimationFrame = saved.caf;
+      Object.defineProperty(globalThis, 'performance', { value: saved.performance, configurable: true, writable: true });
+    },
+  };
+}
+
+const px = (el, prop) => parseFloat(el.style.getPropertyValue(prop));
+const angleOf = (video) => parseFloat(video.style.getPropertyValue('transform').match(/rotate\((-?[\d.]+)deg\)/)?.[1] ?? 'NaN');
+const scaleOf = (video) => parseFloat(video.style.getPropertyValue('transform').match(/scale\(([\d.]+)\)/)?.[1] ?? '1');
+
+test('with motion, a turn starts from the upright picture and ends as the instant turn does', () => {
+  const frames = manualFrames();
   try {
     const { row, frame, wrapper, video } = reelsPage();
     const before = texts([row, frame, wrapper, video]);
     const rot = attach(video, {});
     rot.turn(-1);
-    assert.match(frame.style.getPropertyValue('transition-property'), /width/);
+    // The first frame looks like the upright reel: the same size, not turned yet.
+    assert.equal(px(frame, 'width'), 487);
+    assert.equal(px(frame, 'height'), 869);
+    assert.equal(px(video, 'width'), 487);
+    assert.equal(px(video, 'height'), 869);
+    assert.equal(angleOf(video), 0);
+    frames.at(300);
+    assert.equal(frame.style.getPropertyValue('width'), '869px');
+    assert.equal(frame.style.getPropertyValue('height'), '487px');
+    assert.equal(wrapper.style.getPropertyValue('--x-height'), '487px');
+    assert.equal(row.style.getPropertyValue('margin-top'), '191px');
+    assert.equal(angleOf(video), -90);
+    assert.equal(scaleOf(video), 1);
+    for (const el of [row, frame, wrapper, video]) assert.equal(el.style.getPropertyValue('transition-property'), '', 'no CSS transitions');
     rot.turn(1);
-    await new Promise((r) => setTimeout(r, 400));
+    frames.at(450);
+    frames.at(600);
     assert.deepEqual(texts([row, frame, wrapper, video]), before);
     rot.destroy();
   } finally {
-    globalThis.matchMedia = () => ({ matches: true });
+    frames.restore();
+  }
+});
+
+test('halfway through a turn, everything is halfway and the picture stays inside the frame', () => {
+  const frames = manualFrames();
+  try {
+    const { row, frame, wrapper, video } = reelsPage();
+    const rot = attach(video, {});
+    rot.turn(-1);
+    frames.at(150);
+    const fw = px(frame, 'width');
+    const fh = px(frame, 'height');
+    assert.ok(fw > 500 && fw < 860, `frame width ${fw}`);
+    assert.ok(fh > 500 && fh < 860, `frame height ${fh}`);
+    assert.equal(px(wrapper, '--x-height'), fh, 'the inner wrapper follows the frame');
+    const margin = px(row, 'margin-top');
+    assert.ok(margin > 10 && margin < 180, `row margin ${margin}`);
+    const deg = angleOf(video);
+    assert.ok(deg < -20 && deg > -70, `angle ${deg}`);
+    // The turned picture's bounding box fits in the frame (it would reach over the like column).
+    const r = (deg * Math.PI) / 180;
+    const [vw, vh, s] = [px(video, 'width'), px(video, 'height'), scaleOf(video)];
+    const bw = s * (vw * Math.abs(Math.cos(r)) + vh * Math.abs(Math.sin(r)));
+    const bh = s * (vw * Math.abs(Math.sin(r)) + vh * Math.abs(Math.cos(r)));
+    assert.ok(bw <= fw + 0.5 && bh <= fh + 0.5, `picture ${bw.toFixed(0)}×${bh.toFixed(0)} in frame ${fw.toFixed(0)}×${fh.toFixed(0)}`);
+    assert.ok(s < 0.95, 'the picture shrinks to fit while it is turned partway');
+    rot.destroy();
+  } finally {
+    frames.restore();
+  }
+});
+
+test('a click during a turn carries on from where the picture is', () => {
+  const frames = manualFrames();
+  try {
+    const { row, frame, wrapper, video } = reelsPage();
+    const before = texts([row, frame, wrapper, video]);
+    const rot = attach(video, {});
+    rot.turn(-1);
+    frames.at(150);
+    const mid = { width: px(frame, 'width'), angle: angleOf(video) };
+    rot.turn(1); // back, from halfway
+    assert.ok(Math.abs(px(frame, 'width') - mid.width) < 0.01, 'no jump in size');
+    assert.ok(Math.abs(angleOf(video) - mid.angle) < 0.01, 'no jump in angle');
+    frames.at(300);
+    const back = { width: px(frame, 'width'), angle: angleOf(video) };
+    assert.ok(back.width < mid.width && back.angle > mid.angle, 'heading back upright');
+    rot.turn(-1); // and again, while turning back
+    assert.ok(Math.abs(px(frame, 'width') - back.width) < 0.01, 'no jump in size the second time');
+    assert.ok(Math.abs(angleOf(video) - back.angle) < 0.01, 'no jump in angle the second time');
+    frames.at(600);
+    assert.equal(frame.style.getPropertyValue('width'), '869px');
+    assert.equal(angleOf(video), -90);
+    rot.turn(1);
+    frames.at(900);
+    assert.deepEqual(texts([row, frame, wrapper, video]), before);
+    rot.destroy();
+  } finally {
+    frames.restore();
+  }
+});
+
+test('two turns the same way end upside down, turning the short way each time', () => {
+  const frames = manualFrames();
+  try {
+    const { frame, video } = reelsPage();
+    const rot = attach(video, {});
+    rot.turn(-1);
+    frames.at(300);
+    rot.turn(-1);
+    frames.at(450);
+    const deg = angleOf(video);
+    assert.ok(deg < -100 && deg > -170, `on its way from -90 to -180, not back through 0: ${deg}`);
+    frames.at(600);
+    assert.equal(frame.style.getPropertyValue('width'), '', 'the frame is upright again');
+    assert.match(video.style.getPropertyValue('transform'), /^rotate\((180|-180)deg\)$/);
+    rot.destroy();
+  } finally {
+    frames.restore();
+  }
+});
+
+test('with motion, the post card widens frame by frame and is put back exactly', () => {
+  const frames = manualFrames();
+  try {
+    const { row, frame, video } = postPage();
+    const before = texts([row, frame, video]);
+    const rot = attach(video, {});
+    rot.turn(-1);
+    frames.at(150);
+    const rw = px(row, 'width');
+    assert.ok(rw > 570 && rw < 604, `the card is partway wider: ${rw}`);
+    assert.ok(px(row, 'margin-left') < 0 && px(row, 'margin-left') > -17, 'and stays centred');
+    frames.at(300);
+    assert.equal(frame.style.getPropertyValue('width'), '304px');
+    assert.equal(row.style.getPropertyValue('width'), '604px');
+    rot.turn(1);
+    frames.at(600);
+    assert.deepEqual(texts([row, frame, video]), before);
+    rot.destroy();
+  } finally {
+    frames.restore();
+  }
+});
+
+test('a window that draws no frames still finishes the turn', async () => {
+  const frames = manualFrames(); // frames.at() is never called: no animation frame runs
+  try {
+    const { frame, video } = reelsPage();
+    const rot = attach(video, {});
+    rot.turn(-1);
+    await new Promise((r) => setTimeout(r, 600));
+    assert.equal(frame.style.getPropertyValue('width'), '869px');
+    assert.equal(angleOf(video), -90);
+    rot.destroy();
+  } finally {
+    frames.restore();
   }
 });
 
