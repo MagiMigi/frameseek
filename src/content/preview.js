@@ -11,7 +11,7 @@
   // A nearly flat frame (black, white, a fade) would match any other flat frame.
   const MIN_SPREAD = 40;
   const MIN_BOX_WIDTH = 80;
-  // The popup's Preview size: how much of today's box (Medium) each size takes.
+  // The popup's Preview size: each size's box, as a multiple of Medium's.
   const PREVIEW_SCALES = Object.freeze({ small: 0.67, medium: 1, large: 1.35 });
   const EDGE = 4;
   const GREY_SIZE = 16;

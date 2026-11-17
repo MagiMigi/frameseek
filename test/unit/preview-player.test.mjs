@@ -280,5 +280,8 @@ test('a smaller preview size gives a smaller turned box', async () => {
   assert.ok(parseFloat(box.width) > parseFloat(box.height), `box ${box.width} × ${box.height} should be wide`);
   assert.ok(parseFloat(box.width) < mediumWidth, 'narrower than at medium');
   assert.match(preview.player.style.transform, /rotate\(-90deg\)/);
+  // The turned player keeps its upright shape inside the smaller box.
+  assert.equal(preview.player.style.width, box.height);
+  assert.equal(preview.player.style.height, box.width);
   preview.destroy();
 });

@@ -10,7 +10,14 @@ globalThis.chrome = {
   },
 };
 await import('../../src/shared/settings.js');
-const { DEFAULTS, getSettings } = globalThis.FrameSeekSettings;
+await import('../../src/content/preview.js');
+const { DEFAULTS, PREVIEW_SIZES, getSettings } = globalThis.FrameSeekSettings;
+const { PREVIEW_SCALES } = globalThis.FrameSeekPreview;
+
+test('every preview size the popup can save has a scale, and no other', () => {
+  assert.deepEqual(Object.keys(PREVIEW_SCALES), [...PREVIEW_SIZES]);
+  assert.deepEqual({ ...PREVIEW_SCALES }, { small: 0.67, medium: 1, large: 1.35 });
+});
 
 test('hoverPreview defaults to off', async () => {
   assert.equal(DEFAULTS.hoverPreview, false);
