@@ -32,9 +32,9 @@ Works in Chrome, Edge, Opera and Firefox (desktop and Android) from one codebase
 - **Playback speed**: 0.25× to 2×. Optionally kept for the next video. Off by default; turn on "Speed controls" in the popup.
 - **Hold for 2×** (like YouTube): hold the left mouse button on a playing video and it plays at 2× until you let go, then goes back to your speed. A quick click still pauses. Not on stories, where holding pauses the story as before. On by default; turn off "Hold for 2×" in the popup.
 - **Loop a section** (off by default; turn on "Loop" in the popup): click the A-B button once to mark the start, again to mark the end, and a third time to stop (or use `[`, `]` and `\`). The looped part is marked on the bar; drag its yellow edges to adjust it, and the video follows so you can see the exact frame. Not on stories, where a loop would stop the story from moving on.
-- **Hover preview** (off by default; turn on "Hover preview" in the popup): hovering over the seek bar shows the frame at that point in a small box above the time, like YouTube, including parts you haven't watched yet. To show it, your browser loads a low-quality copy of the video from Instagram's own servers when you first hover over the bar, and lets it go a few seconds after you move away. If FrameSeek can't be sure which file is the video's, it shows the time only.
+- **Hover preview** (off by default; turn on "Hover preview" in the popup): hovering over the seek bar shows the frame at that point in a small box above the time, like YouTube, including parts you haven't watched yet. To show it, your browser loads a low-quality copy of the video from Instagram's own servers when you first hover over the bar, and lets it go a few seconds after you move away. If FrameSeek can't be sure which file is the video's, it shows the time only. Pick how big it is under "Preview size" in the popup: Small, Medium (the default) or Large.
 - **Turn sideways videos** (on by default; turn off "Turn buttons" in the popup): for a video filmed sideways, the curved arrows just outside its top corners turn it a quarter turn left (↺) or right (↻). On the Reels page the frame turns with the picture, and the like column and caption move to stay beside it. On a single reel or post page, and in the popup a reel opens in, the card widens like a landscape post, with the comments still beside it. The hover preview turns too. Each new reel starts upright. Not in the home feed, in stories, or for videos inside a carousel.
-- **Settings popup**: click the toolbar icon to turn each feature on or off. Speed controls, Loop and Hover preview start off, so out of the box you get the seek bar, the shortcuts, hold for 2× and the turn buttons.
+- **Settings popup**: click the toolbar icon to turn each feature on or off and pick the hover preview's size. Speed controls, Loop and Hover preview start off, so out of the box you get the seek bar, the shortcuts, hold for 2× and the turn buttons.
 
 ## Try it locally
 
@@ -104,7 +104,7 @@ npm test          # unit tests
   - A feed video post and the post popup.
   - Hold the mouse on a playing reel: 2× while held, and it keeps playing when you let go. A quick click still pauses.
   - Stories: drag, J / L, and check ← / → still switch stories and holding still pauses the story.
-  - Hover preview (turn it on in the popup): the frame under the mouse on reels, feed posts, the post popup and stories, including parts not watched yet, and nothing extra in the Network panel while it's off.
+  - Hover preview (turn it on in the popup): the frame under the mouse on reels, feed posts, the post popup and stories, including parts not watched yet, at each preview size (Small, Medium, Large), and nothing extra in the Network panel while it's off.
   - Turn buttons: on the Reels page, a single reel page, a video post page and the reel popup, both arrows turn the video, nothing gets covered, and turning back leaves the page exactly as it was. For the same checks without Instagram, open http://localhost:5173/test/rotate.html.
   - Popup toggles (they apply live).
 

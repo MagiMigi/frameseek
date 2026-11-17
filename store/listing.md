@@ -41,7 +41,7 @@ FEATURES
 • Loop any section: mark a start and an end with the A-B button or [ and ], great for learning dance moves, songs and tutorials
 • Playback speed from 0.25× to 2×, optionally remembered for the next video
 • Hold the mouse on a video to play it at 2× until you let go, like YouTube
-• Hover preview: see the frame under the mouse before you jump, like YouTube (off by default)
+• Hover preview: see the frame under the mouse before you jump, like YouTube, in three sizes (off by default)
 • Turn sideways videos: arrows at a reel's top corners turn it a quarter turn, and the likes, caption and comments move to stay beside it
 • Settings popup to turn each feature on or off (speed controls, looping and hover preview start off)
 
@@ -74,7 +74,7 @@ Live listing: https://chromewebstore.google.com/detail/frameseek-video-seek-bar/
      ```
    - **Permission justification for `storage`:**
      ```
-     Saves the user's own settings (on/off switches, skip length, last playback speed). Nothing else is stored.
+     Saves the user's own settings (on/off switches, skip length, hover preview size, last playback speed). Nothing else is stored.
      ```
    - **Host permission justification (`https://www.instagram.com/*`):**
      ```
@@ -87,7 +87,7 @@ Live listing: https://chromewebstore.google.com/detail/frameseek-video-seek-bar/
 5. **Distribution:** Free, Public, all regions.
 6. **Test instructions** tab: leave the username and password empty (never give reviewers your own Instagram login). Under additional instructions, paste:
    ```
-   No sign-in needed: open https://www.instagram.com/reels/ (it works signed out). Hover the bottom of a video to show the seek bar, then click or drag it. Keys: left/right arrows skip, J/L skip 10s, comma/period step one frame. Hold the left mouse button on a playing video to play it at 2× until you let go. Speed controls and Loop are off by default: turn them on in the toolbar popup, then use the speed button or < and >, and the A-B button or [ and ] to loop part of a video. Hover preview is off by default too: turn it on in the popup, then hover the seek bar to see the frame under the mouse. The curved arrows just outside a reel's top corners turn it a quarter turn left or right. FrameSeek collects no data and makes no network requests unless hover preview is on; it then loads a low-quality copy of the hovered video from Instagram's own servers.
+   No sign-in needed: open https://www.instagram.com/reels/ (it works signed out). Hover the bottom of a video to show the seek bar, then click or drag it. Keys: left/right arrows skip, J/L skip 10s, comma/period step one frame. Hold the left mouse button on a playing video to play it at 2× until you let go. Speed controls and Loop are off by default: turn them on in the toolbar popup, then use the speed button or < and >, and the A-B button or [ and ] to loop part of a video. Hover preview is off by default too: turn it on in the popup, then hover the seek bar to see the frame under the mouse; "Preview size" in the popup makes it smaller or larger. The curved arrows just outside a reel's top corners turn it a quarter turn left or right. FrameSeek collects no data and makes no network requests unless hover preview is on; it then loads a low-quality copy of the hovered video from Instagram's own servers.
    ```
 7. **Account** page: turn on email notifications for "item review completed" and "item published", so you hear when the review is done.
 8. Submit for review. It usually takes a few days, longer with the detailed review.
@@ -133,7 +133,7 @@ Opera's moderators check every listing by hand against their [acceptance criteri
    - **License:** MIT. Opera's terms say that without a license of your own, the add-on is offered under CC BY-NC-ND 4.0, so make sure the form records MIT.
 5. If the form has a notes field for the moderators, paste:
    ```
-   Adds a seek bar, skip shortcuts, frame stepping, playback speed (including hold-for-2×) and section looping to videos on instagram.com. The code is not minified or bundled. No data collection and no remote code. No network requests unless the optional hover preview is turned on (off by default); it then loads a low-quality copy of the hovered video from Instagram's own servers. No sign-in needed: open https://www.instagram.com/reels/ and hover the bottom of a video, or hold the mouse on it to play at 2×. The curved arrows at a reel's top corners turn it a quarter turn. Speed controls, Loop and Hover preview are off by default; turn them on in the toolbar popup.
+   Adds a seek bar, skip shortcuts, frame stepping, playback speed (including hold-for-2×) and section looping to videos on instagram.com. The code is not minified or bundled. No data collection and no remote code. No network requests unless the optional hover preview is turned on (off by default); it then loads a low-quality copy of the hovered video from Instagram's own servers. No sign-in needed: open https://www.instagram.com/reels/ and hover the bottom of a video, or hold the mouse on it to play at 2×. The curved arrows at a reel's top corners turn it a quarter turn. Speed controls, Loop and Hover preview are off by default; turn them on in the toolbar popup, where "Preview size" also sets how big the hover preview is.
    ```
 6. Track the review under **Submitted extensions**. For a new version, click **Upgrade** next to the package and upload the new Opera zip.
 
