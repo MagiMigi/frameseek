@@ -421,6 +421,96 @@ test('the size check waits for the turn to finish animating', async () => {
   }
 });
 
+// Instagram re-renders a reel a moment after a zoom or a window resize, sometimes after
+// FrameSeek re-applied the turn: React writes the reel's new upright size onto the frame and
+// the inner wrapper (setProperty with no priority, which replaces FrameSeek's value).
+function instagramResizes({ frame, wrapper }, w, h) {
+  frame.style.setProperty('--x-width', `${w}px`);
+  frame.style.setProperty('--x-height', `${h}px`);
+  wrapper.style.setProperty('--x-height', `${h}px`);
+}
+
+test("a turned reel follows Instagram's new size after a zoom", () => {
+  const nodes = reelsPage();
+  const { row, frame, wrapper, video } = nodes;
+  const rot = attach(video, {});
+  rot.turn(-1);
+  instagramResizes(nodes, 330, 587);
+  assert.equal(rot.ensure(), true);
+  assert.equal(frame.style.getPropertyValue('width'), '587px');
+  assert.equal(frame.style.getPropertyValue('height'), '330px');
+  assert.equal(wrapper.style.getPropertyValue('--x-height'), '330px', 'the wrapper follows the turn again');
+  assert.equal(row.style.getPropertyValue('margin-top'), '128.5px', "the slot is as tall as Instagram's new reel");
+  rot.turn(1);
+  assert.equal(wrapper.style.text, '--x-height:587px', "turning back leaves Instagram's new size");
+  assert.equal(frame.style.text, '--x-height:587px;--x-width:330px');
+  rot.destroy();
+});
+
+test('a turned reel picks up a wrapper Instagram added', () => {
+  const nodes = reelsPage();
+  const { wrapper, video } = nodes;
+  const rot = attach(video, {});
+  rot.turn(-1);
+  const added = new FakeNode('div', { style: { '--x-height': '869px' } });
+  wrapper.append(added);
+  rot.ensure();
+  assert.equal(added.style.getPropertyValue('--x-height'), '487px');
+  rot.destroy();
+  assert.equal(added.style.text, '--x-height:869px');
+});
+
+test('a turned post card takes back a style Instagram replaced', () => {
+  const { frame, video } = postPage();
+  frame.style.setProperty('max-width', '270px');
+  const rot = attach(video, {});
+  rot.turn(-1);
+  frame.style.setProperty('max-width', '300px'); // the popup re-rendered at a new size
+  rot.ensure();
+  assert.equal(frame.style.getPropertyValue('max-width'), 'none');
+  rot.turn(1);
+  assert.equal(frame.style.getPropertyValue('max-width'), '300px');
+  rot.destroy();
+});
+
+test("Instagram's changes are put right at once, not at the next scan", () => {
+  // A stand-in for MutationObserver: the test delivers the records by hand.
+  const observers = [];
+  globalThis.MutationObserver = class {
+    constructor(cb) {
+      this.cb = cb;
+      this.target = null;
+      observers.push(this);
+    }
+    observe(target, options) {
+      this.target = target;
+      this.options = options;
+    }
+    disconnect() {
+      this.target = null;
+    }
+  };
+  try {
+    const nodes = reelsPage();
+    const { row, frame, wrapper, video } = nodes;
+    const rot = attach(video, {});
+    const watching = () => observers.filter((o) => o.target);
+    assert.equal(watching().length, 0, 'nothing watched while upright');
+    rot.turn(-1);
+    assert.deepEqual(watching().map((o) => o.target), [row], 'the row is watched while turned');
+    assert.equal(watching()[0].options.subtree, true);
+    instagramResizes(nodes, 330, 587);
+    watching()[0].cb([]);
+    assert.equal(wrapper.style.getPropertyValue('--x-height'), '330px');
+    assert.equal(frame.style.getPropertyValue('width'), '587px');
+    rot.turn(1);
+    assert.equal(watching().length, 0, 'not watched once upright again');
+    rot.destroy();
+  } finally {
+    delete globalThis.MutationObserver;
+  }
+});
+
 test('onChange reports the turns', () => {
   const { video } = reelsPage();
   const calls = [];

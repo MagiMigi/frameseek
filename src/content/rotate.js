@@ -64,6 +64,11 @@
       return e.el.style.getPropertyValue(e.prop) === e.ours && e.el.style.getPropertyPriority(e.prop) === e.oursPriority;
     }
 
+    // True while every property still holds what was set: nobody else has written over it.
+    get intact() {
+      return this.entries.every(StyleLedger.holdsOurs);
+    }
+
     set(el, prop, value) {
       let entry = this.entries.find((e) => e.el === el && e.prop === prop);
       if (!entry) {
@@ -282,9 +287,7 @@
       if (!this.frame.isConnected || !this.frame.contains(this.video) || this.frame.parentElement !== this.row) return false;
       if (this.disabled) return true; // the page wouldn't take a turn: no arrows for this video
       if (this.host.parentElement !== this.row) this.row.appendChild(this.host);
-      // The page can change width without a resize event (a scrollbar appearing). A turn
-      // still moving is left to finish; the next check catches it.
-      if (this.turns && !this.frameId && pageWidth() !== this.appliedWidth) this.reapply();
+      if (this.turns && !this.frameId && this.pageChanged()) this.reapply();
       this.paint();
       this.place();
       return true;
@@ -302,12 +305,47 @@
       this.turns = next;
       this.angle += dir * 90;
       this.onChange(next);
+      this.watch();
       this.apply(true);
+    }
+
+    // While turned, a change Instagram makes inside the row (React writing a new size after
+    // a zoom, or a new inner wrapper) is put right before the page is drawn, rather than at
+    // the next scan. FrameSeek's own writes come through here too, and change nothing.
+    watch() {
+      if (this.watcher || !globalThis.MutationObserver) return;
+      this.watcher = new MutationObserver(() => {
+        if (this.turns && !this.frameId && this.pageChanged()) this.reapply();
+      });
+      this.watcher.observe(this.row, { attributes: true, attributeFilter: ['style'], childList: true, subtree: true });
+    }
+
+    unwatch() {
+      this.watcher?.disconnect();
+      this.watcher = null;
+    }
+
+    // Something the turn was worked out from has changed since: the page's width (a
+    // scrollbar can appear without a resize event), the reel's upright size (Instagram
+    // re-renders it a moment after a zoom or a resize, sometimes after FrameSeek's own
+    // re-apply), a style the turn set that Instagram wrote over, or an inner wrapper that
+    // sizes itself from --x-height and isn't following the turn.
+    pageChanged() {
+      if (pageWidth() !== this.appliedWidth || !this.shape.intact) return true;
+      if (this.kind !== 'reels') return false;
+      const xw = parseFloat(this.frame.style.getPropertyValue('--x-width'));
+      const xh = parseFloat(this.frame.style.getPropertyValue('--x-height'));
+      if (xw > 0 && xh > 0 && (Math.abs(xw - this.upright.w) > 0.5 || Math.abs(xh - this.upright.h) > 0.5)) return true;
+      if (!isQuarter(this.turns)) return false;
+      return [...this.frame.querySelectorAll('*')].some(
+        (el) => !el.shadowRoot && el.style?.getPropertyValue('--x-height') && !this.sizedInside.includes(el),
+      );
     }
 
     reset() {
       if (!this.turns && !this.shape.size) return;
       this.stopMotion();
+      this.unwatch();
       this.turns = 0;
       this.angle = 0;
       this.geo = null;
@@ -319,6 +357,7 @@
     destroy() {
       this.reset();
       this.stopMotion();
+      this.unwatch();
       this.unshield();
       cancelAnimationFrame(this.scrollFrame);
       clearTimeout(this.resizeTimer);
@@ -335,6 +374,7 @@
     disable() {
       this.disabled = true;
       this.stopMotion();
+      this.unwatch();
       clearTimeout(this.verifyTimer);
       this.turns = 0;
       this.angle = 0;
@@ -474,7 +514,9 @@
       this.angle = angleFor(this.turns); // four quarter turns the same way are upright again
       this.shape.restore();
       this.geo = null;
-      if (this.turns) {
+      if (!this.turns) {
+        this.unwatch();
+      } else {
         this.geo = { ...goal, deg: this.angle };
         try {
           if (isQuarter(this.turns)) {

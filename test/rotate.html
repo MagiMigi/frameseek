@@ -140,6 +140,25 @@
       const reels = document.getElementById('reels');
       reels.append(reel(0), reel(1));
 
+      // Like Instagram after a zoom or a window resize: a moment later (later than
+      // FrameSeek's own re-apply), React writes each reel's new size onto the frame and the
+      // inner wrapper, replacing whatever was there.
+      const START_HEIGHT = innerHeight;
+      let resizeTimer = 0;
+      addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          const h = Math.round(480 * (innerHeight / START_HEIGHT));
+          const w = Math.round((h * 9) / 16);
+          for (const frame of reels.querySelectorAll('.frame')) {
+            frame.style.setProperty('--x-width', `${w}px`);
+            frame.style.setProperty('--x-height', `${h}px`);
+            frame.querySelector('.inner').style.setProperty('--x-height', `${h}px`);
+          }
+          log(`reels re-rendered at ${w}×${h}`);
+        }, 300);
+      });
+
       const postVideo = document.getElementById('post-video');
       postVideo.src = SRC[1];
       postVideo.setAttribute('style', 'display: block;');
