@@ -26,6 +26,9 @@
       .caption { position: absolute; right: calc(100% + 16px); bottom: 0; width: 180px; display: grid; gap: 6px; }
       .caption b { color: var(--fg); }
       .caption span { color: var(--dim); font-size: 12px; }
+      /* A collab line: its person icon sizes itself with --x-height, as Instagram's does. */
+      .caption .collab { display: flex; align-items: center; gap: 4px; }
+      .caption .collab i { display: block; width: var(--x-width); height: var(--x-height); border-radius: 50%; background: var(--dim); }
       .mute { position: absolute; right: 10px; bottom: 10px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; background: rgba(0, 0, 0, 0.4); }
       .likes { width: 60px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 14px; padding-bottom: 6px; }
 
@@ -122,7 +125,7 @@
         inner.append(video);
         const caption = document.createElement('div');
         caption.className = 'caption';
-        caption.innerHTML = `<b>reel ${n + 1}</b><span>A caption that hangs off the frame's left edge.</span>`;
+        caption.innerHTML = `<b>reel ${n + 1}</b><div class="collab"><i style="--x-height: 6px; --x-width: 6px;"></i><span>collab</span></div><span>A caption that hangs off the frame's left edge.</span>`;
         const mute = document.createElement('div');
         mute.className = 'mute';
         frame.append(inner, caption, mute);

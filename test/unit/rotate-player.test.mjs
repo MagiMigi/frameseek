@@ -205,6 +205,23 @@ test("the turn leaves FrameSeek's own seek bar element alone", () => {
   rot.destroy();
 });
 
+test("the caption's own small boxes keep their size", () => {
+  // Signed in, the caption hangs off the frame's left and is part of the frame. A collab
+  // line's person icon sizes itself with --x-height: 12px; turned to the reel's height,
+  // it stretched the caption's header and pushed the caption text out of view.
+  const { frame, video } = reelsPage();
+  const caption = new FakeNode('div');
+  const icon = new FakeNode('div', { style: { '--x-height': '12px', '--x-width': '12px' } });
+  caption.append(icon);
+  frame.children.unshift(caption);
+  caption.parentElement = frame;
+  const rot = attach(video, {});
+  rot.turn(-1);
+  assert.equal(icon.style.text, '--x-height:12px;--x-width:12px');
+  assert.equal(rot.pageChanged(), false, 'the icon is no wrapper waiting to follow the turn');
+  rot.destroy();
+});
+
 test('turning back restores every inline style exactly', () => {
   const { row, frame, wrapper, video } = reelsPage();
   const before = texts([row, frame, wrapper, video]);
@@ -308,6 +325,28 @@ test('halfway through a turn, everything is halfway and the picture stays inside
     const bh = s * (vw * Math.abs(Math.sin(r)) + vh * Math.abs(Math.cos(r)));
     assert.ok(bw <= fw + 0.5 && bh <= fh + 0.5, `picture ${bw.toFixed(0)}×${bh.toFixed(0)} in frame ${fw.toFixed(0)}×${fh.toFixed(0)}`);
     assert.ok(s < 0.95, 'the picture shrinks to fit while it is turned partway');
+    rot.destroy();
+  } finally {
+    frames.restore();
+  }
+});
+
+test('turning back, the inner wrapper follows the frame the whole way', () => {
+  // The wrapper holds the turned height when the turn back starts, not the reel's: it must
+  // still be known as the reel's wrapper, or it stays short until the end and then jumps.
+  const frames = manualFrames();
+  try {
+    const { frame, wrapper, video } = reelsPage();
+    const rot = attach(video, {});
+    rot.turn(-1);
+    frames.at(300);
+    rot.turn(1);
+    frames.at(450);
+    const fh = px(frame, 'height');
+    assert.ok(fh > 500 && fh < 860, `frame height ${fh}`);
+    assert.equal(px(wrapper, '--x-height'), fh, 'the inner wrapper is as tall as the frame halfway back');
+    frames.at(600);
+    assert.equal(wrapper.style.text, '--x-height:869px');
     rot.destroy();
   } finally {
     frames.restore();

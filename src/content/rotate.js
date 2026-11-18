@@ -298,8 +298,7 @@
       if (!this.turns) {
         // Measured upright, also while a turn back is still moving: its styles come off
         // for the measurement, and the new turn starts from the shape on screen.
-        this.shape.restore();
-        this.upright = this.measure();
+        this.measureUpright();
         this.turnedDuration = this.video.duration;
       }
       this.turns = next;
@@ -337,9 +336,13 @@
       const xh = parseFloat(this.frame.style.getPropertyValue('--x-height'));
       if (xw > 0 && xh > 0 && (Math.abs(xw - this.upright.w) > 0.5 || Math.abs(xh - this.upright.h) > 0.5)) return true;
       if (!isQuarter(this.turns)) return false;
-      return [...this.frame.querySelectorAll('*')].some(
-        (el) => !el.shadowRoot && el.style?.getPropertyValue('--x-height') && !this.sizedInside.includes(el),
-      );
+      return [...this.frame.querySelectorAll('*')].some((el) => this.reelSized(el) && !this.sizedInside.includes(el));
+    }
+
+    // An inner wrapper as tall as the reel. Other elements in the frame set --x-height too,
+    // for their own size: the caption hangs off the frame's left, and its icons do.
+    reelSized(el) {
+      return Math.abs(parseFloat(el.style?.getPropertyValue('--x-height')) - this.upright.h) <= 0.5;
     }
 
     reset() {
@@ -412,6 +415,15 @@
       this.shieldFn = null;
     }
 
+    // Takes FrameSeek's styles off and reads the upright layout, and which elements inside
+    // the frame follow a turn. They are judged by their own upright sizes, so this happens
+    // only here: later turns start from a turned shape, where those sizes are FrameSeek's.
+    measureUpright() {
+      this.shape.restore();
+      this.upright = this.measure();
+      this.findSizedInside();
+    }
+
     // The upright layout, read while nothing is turned: the frame's size (the Reels page
     // sets it on the frame as --x-width/--x-height), the neighbour's and the row's widths,
     // and how wide the turned box may get.
@@ -435,8 +447,7 @@
     reapply() {
       if (!this.turns) return;
       this.stopMotion();
-      this.shape.restore();
-      this.upright = this.measure();
+      this.measureUpright();
       this.apply(false);
     }
 
@@ -471,7 +482,6 @@
       this.appliedWidth = pageWidth();
       const from = this.geo ?? this.shapeFor(0, 0);
       this.goal = this.shapeFor(this.turns, this.angle);
-      this.findSizedInside();
       const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
       if (!animate || reduced) {
         this.settle();
@@ -566,17 +576,15 @@
       return Math.max(0, room);
     }
 
-    // Elements inside the frame that size themselves: wrappers that read --x-height (the
-    // Reels page, signed in), and aspect-ratio boxes (a percentage padding) between the
-    // frame and the video, which keep the upright 9:16 shape and would make a widened
-    // frame far taller than it is (a black area over the page below).
+    // Elements inside the frame that size themselves: wrappers that read --x-height as tall
+    // as the reel (the Reels page, signed in), and aspect-ratio boxes (a percentage padding)
+    // between the frame and the video, which keep the upright 9:16 shape and would make a
+    // widened frame far taller than it is (a black area over the page below). The seek
+    // bar's host resets everything, so its --x-height is "initial" and isn't counted.
     findSizedInside() {
       this.sizedInside = [];
       if (this.kind === 'reels') {
-        for (const el of this.frame.querySelectorAll('*')) {
-          // (Skipping FrameSeek's own elements: the seek bar's host resets everything.)
-          if (!el.shadowRoot && el.style?.getPropertyValue('--x-height')) this.sizedInside.push(el);
-        }
+        for (const el of this.frame.querySelectorAll('*')) if (this.reelSized(el)) this.sizedInside.push(el);
       }
       this.aspectBoxes = [];
       for (let el = this.video.parentElement; el && el !== this.frame; el = el.parentElement) {
