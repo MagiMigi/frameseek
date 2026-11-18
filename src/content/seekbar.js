@@ -75,7 +75,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      height: 16px;
+      height: 24px;
       pointer-events: auto;
       cursor: pointer;
       touch-action: none;
@@ -95,10 +95,10 @@
       left: 10px;
       right: 10px;
       bottom: 6px;
-      height: 4px;
+      height: 5px;
     }
     .root.hover-bar .track,
-    .root.dragging .track { height: 6px; }
+    .root.dragging .track { height: 8px; }
 
     .fill {
       position: absolute;
@@ -116,22 +116,24 @@
       position: absolute;
       top: 50%;
       left: 0;
-      width: 13px;
-      height: 13px;
-      margin: -6.5px 0 0 -6.5px;
+      width: 15px;
+      height: 15px;
+      margin: -7.5px 0 0 -7.5px;
       border-radius: 50%;
       background: var(--accent);
       box-shadow: 0 0 3px rgba(0, 0, 0, 0.4);
       transform: scale(0);
       transition: transform 0.12s ease;
     }
+    /* Shown as soon as the pointer is near the bottom, so the bar looks grabbable. */
+    .root.zone .knob { transform: scale(0.7); }
     .root.hover-bar .knob,
     .root.dragging .knob { transform: scale(1); }
 
     .tip {
       position: absolute;
       left: 0;
-      bottom: 52px;
+      bottom: 58px;
       padding: 5px 7px;
       border-radius: 4px;
       background: rgba(20, 20, 20, 0.85);
@@ -147,7 +149,7 @@
     .controls {
       position: absolute;
       left: 10px;
-      bottom: 22px;
+      bottom: 28px;
       display: flex;
       gap: 6px;
       opacity: 0;
