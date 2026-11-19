@@ -232,9 +232,13 @@
 
         const overlay = document.createElement('div');
         overlay.className = 'ig-overlay';
+        // Like Instagram: a click toggles its own idea of whether the video plays, which
+        // doesn't follow a pause that came from somewhere else (frame stepping).
+        let playing = true;
         overlay.addEventListener('click', () => {
-          log(`IG overlay click → toggle play (post ${n})`);
-          video.paused ? video.play() : video.pause();
+          playing = !playing;
+          log(`IG overlay click → ${playing ? 'play' : 'pause'} (post ${n})`);
+          playing ? video.play() : video.pause();
         });
         overlay.addEventListener('dblclick', () => log(`IG overlay dblclick → like (post ${n})`));
 

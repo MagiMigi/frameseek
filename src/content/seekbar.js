@@ -351,6 +351,7 @@
       this.lastText = '';
       this.destroyed = false;
       this.stepping = false; // paused by frame stepping; shortcuts keep targeting this video
+      this.stepPaused = false; // frame stepping paused a playing video, without Instagram knowing
       this.repeat = null; // looped section: { start, end }, end is null until it's set
       this.handleDrag = null; // 'start' or 'end' while one of the loop's edges is dragged
       this.lastRepeatTime = null;
@@ -441,6 +442,7 @@
       el.addEventListener('pointermove', this.onZoneMove, { passive: true });
       el.addEventListener('pointerdown', this.onZoneDown, { passive: true, capture: true });
       el.addEventListener('pointerdown', this.onHoldDown, { passive: true, capture: true });
+      el.addEventListener('pointerdown', this.onStepDown, { passive: true, capture: true });
       el.addEventListener('pointerleave', this.onZoneLeave, { passive: true });
       this.mountEl = el;
     }
@@ -451,6 +453,7 @@
         el.removeEventListener('pointermove', this.onZoneMove);
         el.removeEventListener('pointerdown', this.onZoneDown, { capture: true });
         el.removeEventListener('pointerdown', this.onHoldDown, { capture: true });
+        el.removeEventListener('pointerdown', this.onStepDown, { capture: true });
         el.removeEventListener('pointerleave', this.onZoneLeave);
         if (this.restorePosition !== null) el.style.position = this.restorePosition;
       }
@@ -548,6 +551,7 @@
       this.destroyed = true;
       this.cancelHold();
       this.endRelease();
+      this.endStepResume();
       cancelAnimationFrame(this.frame);
       cancelAnimationFrame(this.seekFrame);
       clearTimeout(this.flashTimer);
@@ -724,7 +728,10 @@
     // leave us on the frame we started from.
     stepFrame(dir) {
       if (!this.duration) return false;
-      if (!this.video.paused) this.video.pause();
+      if (!this.video.paused) {
+        this.video.pause();
+        this.stepPaused = true;
+      }
       this.stepping = true;
       const fd = this.frameDuration;
       const base = this.pendingSeek ?? this.video.currentTime;
@@ -944,6 +951,8 @@
     // The element got a new source: its frame rate may differ.
     onEmptied = () => {
       this.cancelHold();
+      this.stepPaused = false;
+      this.endStepResume();
       this.repeat = null;
       this.stopFrameProbe();
       this.preview?.reset();
@@ -955,7 +964,10 @@
     };
 
     onPlay = () => {
-      if (!this.video.paused) this.stepping = false;
+      if (!this.video.paused) {
+        this.stepping = false;
+        this.stepPaused = false;
+      }
       if (!this.hold?.active && this.desiredRate !== null && Math.abs(this.video.playbackRate - this.desiredRate) > 0.001) {
         this.video.playbackRate = this.desiredRate;
       }
@@ -1162,6 +1174,34 @@
       this.releaseTimer = 0;
       this.releaseClick = false;
       for (const type of RELEASE_EVENTS) window.removeEventListener(type, this.onRelease, true);
+    };
+
+    // ---- playing again after frame stepping -------------------------------------
+
+    // Frame stepping paused the video without Instagram knowing, so to Instagram it still
+    // plays: its click on the picture would only "pause" it, and a second click was needed.
+    // That click plays the video here instead, and Instagram never sees it, so both agree
+    // it plays again. Not on stories, where a click on the picture moves to another story.
+    onStepDown = (e) => {
+      if (!this.stepPaused || !this.video.paused || this.story || e.button !== 0) return;
+      if (e.composedPath().includes(this.host) || this.onInstagramButton(e.target)) return;
+      this.endStepResume();
+      window.addEventListener('click', this.onStepClick, true);
+      window.addEventListener('pointerdown', this.endStepResume, true); // a new press, a new click
+    };
+
+    // A click that ends outside the picture (a drag away) goes on to the page as usual.
+    onStepClick = (e) => {
+      this.endStepResume();
+      if (!this.stepPaused || !this.video.paused || !e.composedPath().includes(this.mountEl)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.video.play().catch(() => {});
+    };
+
+    endStepResume = () => {
+      window.removeEventListener('click', this.onStepClick, true);
+      window.removeEventListener('pointerdown', this.endStepResume, true);
     };
 
     // Instagram's own buttons and links on the video (mute, volume, tagged people, caption
