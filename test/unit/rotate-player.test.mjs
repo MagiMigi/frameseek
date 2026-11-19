@@ -222,6 +222,55 @@ test("the caption's own small boxes keep their size", () => {
   rot.destroy();
 });
 
+// A wide reel as Instagram lays it out (measured 2026-11-19): the reels list scrolls; a wide
+// reel's slot is as tall as the list and centres the row's parent, which keeps 16 px above
+// and below the row. Tall reels get a slot only as tall as they are. The list here is 841 px,
+// below a 60 px top bar in the 901 px window.
+function wideReelPage() {
+  const page = new FakeNode('div', { rect: { left: 0, top: 0, width: 1920, height: 901 } });
+  page.root = true;
+  const list = new FakeNode('div', { rect: { left: 0, top: 60, width: 1920, height: 841 }, computed: { overflowY: 'auto' } });
+  list.clientHeight = 841;
+  const slot = new FakeNode('div', { rect: { left: 0, top: 60, width: 1920, height: 841 }, computed: { display: 'flex' } });
+  const holder = new FakeNode('div', { rect: { left: 340, top: 143, width: 1214, height: 675 }, computed: { paddingTop: '16px', paddingBottom: '16px' } });
+  const row = new FakeNode('div', { rect: { left: 340, top: 159, width: 1214, height: 643 }, computed: { display: 'flex' } });
+  const frame = new FakeNode('div', {
+    rect: { left: 340, top: 159, width: 1142, height: 643 },
+    style: { '--x-width': '1142px', '--x-height': '643px' },
+  });
+  const wrapper = new FakeNode('div', { rect: { left: 340, top: 159, width: 1142, height: 643 }, style: { '--x-height': '643px' } });
+  const video = new FakeNode('video', { rect: { left: 340, top: 159, width: 1142, height: 643 } });
+  video.duration = 20;
+  const side = new FakeNode('div', { rect: { left: 1494, top: 159, width: 60, height: 643 } });
+  side.append(new FakeNode('svg', { attrs: { 'aria-label': 'Like' } }));
+  wrapper.append(video);
+  frame.append(wrapper);
+  row.append(frame, side);
+  holder.append(row);
+  slot.append(holder);
+  list.append(slot);
+  page.append(list);
+  return { page, list, slot, holder, row, frame, wrapper, video, side };
+}
+
+test('a wide reel turned upright stays inside its slot', () => {
+  const num = (el, prop) => parseFloat(el.style.getPropertyValue(prop));
+  const { row, frame, wrapper, video } = wideReelPage();
+  const before = texts([row, frame, wrapper, video]);
+  const rot = attach(video, {});
+  assert.ok(rot, 'the Reels layout is recognised');
+  rot.turn(1);
+  // As tall as the list less the 16 px kept above and below, in the turned proportion.
+  assert.equal(num(frame, 'height'), 809);
+  assert.ok(Math.abs(num(frame, 'width') - (809 * 643) / 1142) < 0.01, `frame width ${num(frame, 'width')}`);
+  assert.equal(num(wrapper, '--x-height'), 809);
+  assert.equal(row.style.getPropertyValue('margin-top'), '0px', 'no margins: the slot is already taller than the reel was');
+  assert.match(video.style.getPropertyValue('transform'), /rotate\(90deg\)/);
+  rot.turn(-1);
+  assert.deepEqual(texts([row, frame, wrapper, video]), before);
+  rot.destroy();
+});
+
 test('turning back restores every inline style exactly', () => {
   const { row, frame, wrapper, video } = reelsPage();
   const before = texts([row, frame, wrapper, video]);

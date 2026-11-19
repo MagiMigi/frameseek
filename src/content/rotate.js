@@ -24,9 +24,10 @@
     return null;
   }
 
-  // Reels page: the old height becomes the new width, unless the window is narrower.
-  function reelsSize({ w, h, maxWidth }) {
-    const width = Math.min(h, maxWidth);
+  // Reels page: the old height becomes the new width, unless the window is narrower, or the
+  // turned reel would be taller than maxHeight (a wide reel turned upright).
+  function reelsSize({ w, h, maxWidth, maxHeight = Infinity }) {
+    const width = Math.min(h, maxWidth, (maxHeight * h) / w);
     return { width, height: (width * w) / h };
   }
 
@@ -440,7 +441,23 @@
       }
       const side = this.side.getBoundingClientRect().width;
       const room = this.room(this.kind === 'reels' ? fr : rr, w + side, rr.width);
-      return { w, h, side, rowW: rr.width, room };
+      const tall = this.kind === 'reels' ? this.reelsRoomTall() : Infinity;
+      return { w, h, side, rowW: rr.width, room, tall };
+    }
+
+    // How tall a turned reel may get: as tall as the reels list shows, less the space kept
+    // above and below the row. A wide reel's slot is as tall as the list, with the reel
+    // centred in it, so a wide reel turned upright any taller would cover its neighbours.
+    reelsRoomTall() {
+      let list = null;
+      for (let el = this.row.parentElement; el && !list; el = el.parentElement) {
+        if (/auto|scroll|overlay/.test(getComputedStyle(el).overflowY ?? '')) list = el;
+      }
+      const view = globalThis.document?.documentElement?.clientHeight || innerHeight;
+      const shown = Math.min(list?.clientHeight || view, view);
+      const holder = this.row.parentElement ? getComputedStyle(this.row.parentElement) : null;
+      const kept = (parseFloat(holder?.paddingTop) || 0) + (parseFloat(holder?.paddingBottom) || 0);
+      return Math.max(0, shown - kept);
     }
 
     // After a window resize: measure the upright layout again and turn to the same state.
@@ -456,11 +473,11 @@
     // margins that keep the reel's slot as tall as before (pad), on the post layout how
     // much wider the card gets than its column (widen).
     shapeFor(turns, deg) {
-      const { w, h, side, rowW, room } = this.upright;
+      const { w, h, side, rowW, room, tall } = this.upright;
       if (!isQuarter(turns)) return { fw: w, fh: h, vw: w, vh: h, deg, pad: 0, widen: 0 };
       if (this.kind === 'reels') {
         // The like column on the right, and as much again for the caption on the left.
-        const size = reelsSize({ w, h, maxWidth: room - 2 * (side + 16) });
+        const size = reelsSize({ w, h, maxWidth: room - 2 * (side + 16), maxHeight: tall });
         const pad = Math.max(0, (h - size.height) / 2);
         return { fw: size.width, fh: size.height, vw: size.height, vh: size.width, deg, pad, widen: 0 };
       }

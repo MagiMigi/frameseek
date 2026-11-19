@@ -17,8 +17,11 @@
       h2 { margin: 24px 16px 8px; font-size: 15px; color: var(--dim); }
       svg.icon { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; color: var(--fg); display: block; }
 
-      /* Reels page */
-      .slot { display: flex; justify-content: center; padding: 16px 0; }
+      /* Reels page: the reels list scrolls and snaps. A tall reel's slot is as tall as the
+         reel; a wide reel's slot is as tall as the list, with the reel centred in it. */
+      #reels { height: 80vh; overflow-y: auto; scroll-snap-type: y mandatory; border-block: 1px solid var(--line); }
+      .slot { display: flex; justify-content: center; padding: 16px 0; scroll-snap-align: start; }
+      .slot.wide { box-sizing: border-box; height: 100%; align-items: center; }
       .reels-row { display: flex; flex-direction: row; }
       .frame { position: relative; width: var(--x-width); height: var(--x-height); background: #000; border-radius: 4px; }
       .frame .inner { position: relative; width: 100%; height: var(--x-height); }
@@ -107,19 +110,26 @@
         return svg;
       }
 
-      const FRAME_STYLE = '--x-width: 270px; --x-height: 480px;';
-      function reel(n) {
+      // Reel sizes at the starting window height: tall 9:16 reels, and a wide 16:9 one that
+      // is wider than the list is tall, as on Instagram (1142 px wide in a 955 px list).
+      const TALL = { w: 270, h: 480 };
+      const WIDE = { w: 720, h: 405 };
+      const frameStyle = ({ w, h }) => `--x-width: ${w}px; --x-height: ${h}px;`;
+      function reel(n, size = TALL) {
         const slot = document.createElement('div');
-        slot.className = 'slot';
+        slot.className = size === WIDE ? 'slot wide' : 'slot';
         const row = document.createElement('div');
         row.className = 'reels-row';
         const frame = document.createElement('div');
         frame.className = 'frame';
-        frame.setAttribute('style', FRAME_STYLE);
+        frame.setAttribute('style', frameStyle(size));
+        frame.dataset.w = size.w;
+        frame.dataset.h = size.h;
         const inner = document.createElement('div');
         inner.className = 'inner';
-        inner.setAttribute('style', '--x-height: 480px;');
+        inner.setAttribute('style', `--x-height: ${size.h}px;`);
         const video = document.createElement('video');
+        // Both clips are 16:9: a tall reel crops its clip (object-fit: cover).
         Object.assign(video, { src: SRC[n % SRC.length], muted: true, loop: true, playsInline: true, autoplay: true, preload: 'auto' });
         video.setAttribute('style', 'object-fit: cover; display: block;');
         inner.append(video);
@@ -142,7 +152,7 @@
         return slot;
       }
       const reels = document.getElementById('reels');
-      reels.append(reel(0), reel(1));
+      reels.append(reel(0), reel(1, WIDE), reel(2));
 
       // Like Instagram after a zoom or a window resize: a moment later (later than
       // FrameSeek's own re-apply), React writes each reel's new size onto the frame and the
@@ -152,14 +162,15 @@
       addEventListener('resize', () => {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
-          const h = Math.round(480 * (innerHeight / START_HEIGHT));
-          const w = Math.round((h * 9) / 16);
+          const k = innerHeight / START_HEIGHT;
           for (const frame of reels.querySelectorAll('.frame')) {
+            const h = Math.round(frame.dataset.h * k);
+            const w = Math.round(frame.dataset.w * k);
             frame.style.setProperty('--x-width', `${w}px`);
             frame.style.setProperty('--x-height', `${h}px`);
             frame.querySelector('.inner').style.setProperty('--x-height', `${h}px`);
           }
-          log(`reels re-rendered at ${w}×${h}`);
+          log(`reels re-rendered at ${Math.round(k * 100)}%`);
         }, 300);
       });
 
@@ -184,7 +195,8 @@
         const old = reels.querySelector('.frame');
         const fresh = document.createElement('div');
         fresh.className = 'frame';
-        fresh.setAttribute('style', FRAME_STYLE);
+        fresh.setAttribute('style', frameStyle(TALL));
+        Object.assign(fresh.dataset, old.dataset);
         while (old.firstChild) fresh.append(old.firstChild);
         old.replaceWith(fresh);
         log('frame replaced');

@@ -39,6 +39,18 @@ test('reelsSize uses the old height as the new width', () => {
   near(capped.height, 392.3);
 });
 
+test('reelsSize keeps a wide reel turned upright no taller than the list shows', () => {
+  // 1142×643 turned would be 643×1142, far taller than a 955 px list with 16 px kept above
+  // and below: it keeps its turned shape at the list's height instead.
+  const tall = reelsSize({ w: 1142, h: 643, maxWidth: 2000, maxHeight: 923 });
+  near(tall.height, 923);
+  near(tall.width, 519.7);
+  // A tall reel turned gets shorter, so the list's height doesn't limit it.
+  const wide = reelsSize({ w: 487, h: 869, maxWidth: 2000, maxHeight: 869 });
+  near(wide.width, 869);
+  near(wide.height, 487);
+});
+
 test("postSize keeps the card's height until the window caps it", () => {
   const full = postSize({ w: 338, h: 601, panelWidth: 335, maxCardWidth: 1800 });
   near(full.width, 1068.6);
