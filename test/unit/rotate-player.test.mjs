@@ -609,6 +609,25 @@ test('onChange reports the turns', () => {
   rot.destroy();
 });
 
+test('on the Reels page the arrows are positioned in the row, inside the reels list', () => {
+  // The row's own positioning box is outside the scrolling reels list: arrows placed
+  // against it weren't clipped by the list, and every loaded reel's arrows made the page
+  // taller. The row (position: static on Instagram) becomes their positioning box.
+  const { row, video } = reelsPage();
+  row.computed.position = 'static';
+  const before = row.style.text;
+  const rot = attach(video, {});
+  assert.equal(row.style.getPropertyValue('position'), 'relative');
+  rot.turn(1);
+  rot.turn(-1);
+  assert.equal(row.style.getPropertyValue('position'), 'relative', 'a turn and back leave it');
+  row.style.removeProperty('position'); // React wrote the row's style again
+  rot.ensure();
+  assert.equal(row.style.getPropertyValue('position'), 'relative', 'put back at the next scan');
+  rot.destroy();
+  assert.equal(row.style.text, before);
+});
+
 test('destroy restores and removes the arrows', () => {
   const { row, frame, wrapper, video } = reelsPage();
   const before = texts([row, frame, wrapper, video]);
@@ -798,6 +817,78 @@ test('the post card fits beside a wide navigation column', () => {
   } finally {
     delete globalThis.document.documentElement;
   }
+});
+
+// A wide video on a post page or in the popup, as Instagram shows it (measured 2026-11-19):
+// the frame is a 4:3 or square box, and the 16:9 picture is letterboxed inside it.
+function letterboxPage({ rowRect, frameRect, videoRect, sideWidth }) {
+  const page = new FakeNode('div', { rect: { left: 0, top: 0, width: 1920, height: 901 } });
+  page.root = true;
+  const row = new FakeNode('div', { rect: rowRect, computed: { display: 'flex' } });
+  const frame = new FakeNode('div', { rect: frameRect });
+  const video = new FakeNode('video', { rect: videoRect, style: { display: 'block' }, computed: { objectFit: 'contain' } });
+  video.videoWidth = 1920;
+  video.videoHeight = 1080;
+  video.duration = 23;
+  const side = new FakeNode('div', { rect: { left: frameRect.left + frameRect.width, top: frameRect.top, width: sideWidth, height: frameRect.height } });
+  side.append(new FakeNode('svg', { attrs: { 'aria-label': 'Like' } }), new FakeNode('textarea'));
+  frame.append(video);
+  row.append(frame, side);
+  page.append(row);
+  return { row, frame, video };
+}
+
+test('in the popup a wide video turns to its own shape, not the square box', () => {
+  // 1920×1080 letterboxed in an 853 px square: turned, the picture is 853 × 1080 / 1920 wide.
+  const { row, frame, video } = letterboxPage({
+    rowRect: { left: 64, top: 24, width: 1777, height: 853 },
+    frameRect: { left: 276, top: 24, width: 853, height: 853 },
+    videoRect: { left: 276, top: 211, width: 853, height: 480 },
+    sideWidth: 500,
+  });
+  const rot = attach(video, {});
+  rot.turn(1);
+  assert.equal(frame.style.getPropertyValue('width'), '479.8125px');
+  assert.equal(frame.style.getPropertyValue('height'), '853px');
+  assert.equal(video.style.getPropertyValue('width'), '853px');
+  assert.equal(video.style.getPropertyValue('height'), '479.8125px');
+  assert.equal(row.style.getPropertyValue('width'), '', "the popup's row spans the dialog and centres the card itself");
+  rot.destroy();
+});
+
+test('on a post page a card that turns narrower stays centred in its column', () => {
+  // The single reel page: a 600×450 box beside 335 px of comments, in a 935 px row. The
+  // 16:9 picture turned is 450 × 1080 / 1920 = 253.125 wide, so the card is 588.125 wide,
+  // 346.875 narrower than the row: 173.4375 px on each side.
+  const { row, frame, video } = letterboxPage({
+    rowRect: { left: 485, top: 38, width: 935, height: 450 },
+    frameRect: { left: 485, top: 38, width: 600, height: 450 },
+    videoRect: { left: 485, top: 95, width: 600, height: 338 },
+    sideWidth: 335,
+  });
+  const before = texts([row, frame, video]);
+  const rot = attach(video, {});
+  rot.turn(1);
+  assert.equal(frame.style.getPropertyValue('width'), '253.125px');
+  assert.equal(row.style.getPropertyValue('width'), '588.125px');
+  assert.equal(row.style.getPropertyValue('margin-left'), '173.4375px');
+  assert.equal(row.style.getPropertyValue('margin-right'), '173.4375px');
+  rot.turn(-1);
+  assert.deepEqual(texts([row, frame, video]), before);
+  rot.destroy();
+});
+
+test("a card's border doesn't change how much it grows", () => {
+  // The row is 2 px wider than picture + comments (a 1 px border each side). Turned, the
+  // picture grows from 270 to 304 px, so the card grows by 34 px: 572 → 606.
+  const { row, frame, video } = postPage();
+  row.rect = { ...row.rect, left: 64, width: 572 }; // still centred at 350
+  const rot = attach(video, {});
+  rot.turn(-1);
+  assert.equal(frame.style.getPropertyValue('width'), '304px');
+  assert.equal(row.style.getPropertyValue('width'), '606px');
+  assert.equal(row.style.getPropertyValue('margin-left'), '-17px');
+  rot.destroy();
 });
 
 test("a card that won't widen is put back and loses its arrows", () => {

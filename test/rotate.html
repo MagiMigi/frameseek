@@ -8,7 +8,7 @@
       /* Two fake Instagram layouts, built like the real ones (measured 2026-11-16), at about
          half size: the Reels page row (frame + like column, caption hanging off the frame's
          left) and the post card (frame + comments panel, capped by its parent, with a
-         "more posts" grid below). */
+         "more posts" grid below), also with a wide video letterboxed in a 4:3 frame. */
       :root { --bg: #000; --fg: #f5f5f5; --dim: #a8a8a8; --line: #262626; --panel: #000; }
       body.light { --bg: #fff; --fg: #000; --dim: #737373; --line: #dbdbdb; --panel: #fff; }
       body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
@@ -87,6 +87,26 @@
       </div>
       <p class="more">More posts from someone</p>
       <div class="grid"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+
+    <h2>Post card with a wide video (letterboxed in a 4:3 box, like Instagram's)</h2>
+    <div class="column">
+      <div class="cardparent">
+        <div class="post-row" id="wide-post-row">
+          <div class="pframe" style="width: 240px; height: 180px; flex-basis: 240px; max-width: 240px;">
+            <div class="inner"><video id="wide-post-video" muted loop playsinline autoplay preload="auto"></video></div>
+          </div>
+          <div class="panel">
+            <header><b>someone</b> · Follow</header>
+            <div class="comments"><div>a comment</div></div>
+            <footer>
+              <div class="icons" id="wide-post-icons"></div>
+              <form onsubmit="return false"><textarea rows="1" placeholder="Add a comment…"></textarea></form>
+            </footer>
+          </div>
+        </div>
+      </div>
+      <p class="more">More posts from someone</p>
     </div>
 
     <script>
@@ -176,8 +196,14 @@
 
       const postVideo = document.getElementById('post-video');
       postVideo.src = SRC[1];
-      postVideo.setAttribute('style', 'display: block;');
+      // The clip is 16:9: filling the 9:16 box, it looks like a tall reel (browsers would
+      // letterbox it, and a letterboxed 16:9 picture turned fits this box as it is).
+      postVideo.setAttribute('style', 'display: block; object-fit: cover;');
       for (const l of ['Like', 'Comment', 'Share']) document.getElementById('post-icons').append(icon(l));
+      const widePostVideo = document.getElementById('wide-post-video');
+      widePostVideo.src = SRC[0];
+      widePostVideo.setAttribute('style', 'display: block; object-fit: contain;');
+      for (const l of ['Like', 'Comment', 'Share']) document.getElementById('wide-post-icons').append(icon(l));
       const postRow = document.getElementById('post-row');
       // Instagram's own listeners on the card: a click reaching the video or the comments
       // after an arrow click (the second click of a double click) would pause or like.

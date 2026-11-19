@@ -60,6 +60,14 @@ test("postSize keeps the card's height until the window caps it", () => {
   near(capped.height, 486.5);
 });
 
+test("postSize takes the picture's own shape when it differs from the frame's", () => {
+  // The popup letterboxes a 16:9 video in an 853 px square: turned, the picture is
+  // 853 × 9 / 16 wide, not the square's 853.
+  const popup = postSize({ w: 853, h: 853, panelWidth: 500, maxCardWidth: 1681, aspect: 16 / 9 });
+  near(popup.width, 479.8);
+  near(popup.height, 853);
+});
+
 test('fitScale shrinks a turning picture just enough to stay inside its frame', () => {
   const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 0.001, `${actual} is not about ${expected}`);
   close(fitScale({ vw: 487, vh: 869, deg: 0, fw: 487, fh: 869 }), 1);

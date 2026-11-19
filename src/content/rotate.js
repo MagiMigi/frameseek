@@ -31,11 +31,12 @@
     return { width, height: (width * w) / h };
   }
 
-  // Post card: the picture keeps the card's height, so its width is h × h / w, unless the
-  // card (picture + comments panel) would be wider than the window allows.
-  function postSize({ w, h, panelWidth, maxCardWidth }) {
-    const width = Math.min((h * h) / w, maxCardWidth - panelWidth);
-    return { width, height: (width * w) / h };
+  // Post card: the picture keeps the card's height, so turned its width is h / aspect (the
+  // upright picture's width / height, the frame's own unless the picture is letterboxed in
+  // it), unless the card (picture + comments panel) would be wider than the window allows.
+  function postSize({ w, h, panelWidth, maxCardWidth, aspect = w / h }) {
+    const width = Math.min(h / aspect, maxCardWidth - panelWidth);
+    return { width, height: width * aspect };
   }
 
   // How much a vw × vh picture turned by `deg` must shrink to fit inside an fw × fh frame:
@@ -219,6 +220,7 @@
       this.turns = 0;
       this.angle = 0; // degrees, counted on across turns so each one turns the short way
       this.shape = new StyleLedger(); // every inline style a turn sets on Instagram's elements
+      this.anchor = new StyleLedger(); // the row as the arrows' positioning box (Reels page)
       this.upright = null; // the upright layout, measured when a turn starts from upright
       this.geo = null; // the shape on screen now: null when upright and untouched
       this.goal = null; // the shape the current turn ends in
@@ -226,7 +228,7 @@
       this.fallbackTimer = 0;
       this.sizedInside = []; // inner wrappers sized from --x-height
       this.aspectBoxes = []; // [element, padding property] of aspect-ratio boxes
-      this.widening = false; // the post card's row overflows its column while turned
+      this.widening = false; // the post card's row is wider or narrower than its column while turned
       this.turnedDuration = 0;
       this.build();
       this.onEmptied = () => this.reset();
@@ -288,10 +290,22 @@
       if (!this.frame.isConnected || !this.frame.contains(this.video) || this.frame.parentElement !== this.row) return false;
       if (this.disabled) return true; // the page wouldn't take a turn: no arrows for this video
       if (this.host.parentElement !== this.row) this.row.appendChild(this.host);
+      this.anchorArrows();
       if (this.turns && !this.frameId && this.pageChanged()) this.reapply();
       this.paint();
       this.place();
       return true;
+    }
+
+    // On the Reels page the row scrolls inside the reels list, but the box its children are
+    // positioned against is outside that list: arrows placed there weren't clipped or
+    // scrolled by the list, and every loaded reel's arrows made the whole page taller. The
+    // row (position: static on Instagram) becomes their positioning box. Nothing else of
+    // Instagram's in the row is positioned against a box outside it (checked 2026-11-19).
+    anchorArrows() {
+      if (this.kind !== 'reels') return;
+      if (this.anchor.size ? this.anchor.intact : getComputedStyle(this.row).position !== 'static') return;
+      this.anchor.set(this.row, 'position', 'relative');
     }
 
     turn(dir) {
@@ -371,6 +385,7 @@
       removeEventListener('resize', this.onResize);
       removeEventListener('scroll', this.onScroll, { capture: true });
       this.host.remove();
+      this.anchor.restore();
     }
 
     // The page wouldn't take the turned size: put everything back and stop offering the
@@ -386,6 +401,7 @@
       this.shape.restore();
       this.unshield();
       this.host.remove();
+      this.anchor.restore();
       this.onChange(0);
     }
 
@@ -440,9 +456,23 @@
         h = xh;
       }
       const side = this.side.getBoundingClientRect().width;
-      const room = this.room(this.kind === 'reels' ? fr : rr, w + side, rr.width);
+      // The popup's row spans the dialog, far wider than its card.
+      const popup = this.kind === 'post' && rr.width > w + side + POPUP_ROW_SLACK;
+      const room = this.room(this.kind === 'reels' ? fr : rr, popup);
       const tall = this.kind === 'reels' ? this.reelsRoomTall() : Infinity;
-      return { w, h, side, rowW: rr.width, room, tall };
+      const aspect = this.kind === 'post' ? this.pictureAspect(w / h) : w / h;
+      return { w, h, side, rowW: rr.width, room, tall, popup, aspect };
+    }
+
+    // The upright picture's width / height. On a post page and in the popup Instagram
+    // letterboxes a wide video in a 4:3 or square frame, so the picture is the video file's
+    // shape there (object-fit: contain), or else the video element's own box.
+    pictureAspect(fallback) {
+      const v = this.video;
+      const fit = getComputedStyle(v).objectFit;
+      if ((fit === 'contain' || fit === 'scale-down') && v.videoWidth > 0 && v.videoHeight > 0) return v.videoWidth / v.videoHeight;
+      const vr = v.getBoundingClientRect();
+      return vr.width > 0 && vr.height > 0 ? vr.width / vr.height : fallback;
     }
 
     // How tall a turned reel may get: as tall as the reels list shows, less the space kept
@@ -471,9 +501,9 @@
     // The shape of a turn state: the frame's size (fw × fh), the video's own size (vw × vh,
     // always the upright proportion), its angle, and how the row moves: on the Reels page
     // margins that keep the reel's slot as tall as before (pad), on the post layout how
-    // much wider the card gets than its column (widen).
+    // much wider the card gets than its column (widen; less than 0 when it gets narrower).
     shapeFor(turns, deg) {
-      const { w, h, side, rowW, room, tall } = this.upright;
+      const { w, h, side, room, tall, popup, aspect } = this.upright;
       if (!isQuarter(turns)) return { fw: w, fh: h, vw: w, vh: h, deg, pad: 0, widen: 0 };
       if (this.kind === 'reels') {
         // The like column on the right, and as much again for the caption on the left.
@@ -481,11 +511,11 @@
         const pad = Math.max(0, (h - size.height) / 2);
         return { fw: size.width, fh: size.height, vw: size.height, vh: size.width, deg, pad, widen: 0 };
       }
-      // The picture keeps the card's height; the popup's row already spans the window, so
-      // only a narrower row (single reel and post pages) needs widening.
-      const size = postSize({ w, h, panelWidth: side, maxCardWidth: room });
-      const needed = size.width + side;
-      const widen = rowW < needed - 1 ? needed - rowW : 0;
+      // The picture keeps the card's height. The popup's row spans the window and centres
+      // the card; on single reel and post pages the row is the card, so it grows or shrinks
+      // with the picture (its borders stay as they are) and stays centred in its column.
+      const size = postSize({ w, h, panelWidth: side, maxCardWidth: room, aspect });
+      const widen = !popup && Math.abs(size.width - w) > 1 ? size.width - w : 0;
       return { fw: size.width, fh: h, vw: size.height, vh: size.width, deg, pad: 0, widen };
     }
 
@@ -504,7 +534,7 @@
         this.settle();
         return;
       }
-      this.widening = from.widen > 0 || this.goal.widen > 0;
+      this.widening = from.widen !== 0 || this.goal.widen !== 0;
       const start = performance.now();
       const step = () => {
         const t = Math.min(1, (performance.now() - start) / MOTION_MS);
@@ -547,7 +577,7 @@
         this.geo = { ...goal, deg: this.angle };
         try {
           if (isQuarter(this.turns)) {
-            this.widening = goal.widen > 0;
+            this.widening = goal.widen !== 0;
             this.draw(this.geo);
             this.verifySoon(goal.fw);
           } else {
@@ -582,14 +612,14 @@
     // How wide the turned box may get: centred where it is, inside the content area
     // (right of Instagram's navigation, however wide that is) and inside the page. A
     // popup's row spans its own room, so it caps the card too.
-    room(rect, uprightCardWidth, rowW) {
+    room(rect, popup) {
       const area = this.row.closest?.('main')?.getBoundingClientRect();
       const left = Math.max(0, area ? area.left : 0);
       const right = Math.min(pageWidth(), area ? area.right : pageWidth());
       const centre = rect.left + rect.width / 2;
       let room = 2 * Math.min(centre - left, right - centre) - 2 * EDGE_GAP;
-      // The popup's row spans the dialog, far wider than its card: that is the card's room.
-      if (this.kind === 'post' && rowW > uprightCardWidth + POPUP_ROW_SLACK) room = Math.min(room, rowW - 2 * EDGE_GAP);
+      // The popup's row spans the dialog: that is the card's room.
+      if (popup) room = Math.min(room, rect.width - 2 * EDGE_GAP);
       return Math.max(0, room);
     }
 
@@ -635,7 +665,9 @@
       } else {
         f('aspect-ratio', 'auto');
         if (this.widening) {
-          // The card overflows its column evenly, so the column and the grid below stay.
+          // The card is wider or narrower than its column by the same on both sides, so the
+          // column and the grid below stay. Its width counts its borders, as rowW does.
+          r('box-sizing', 'border-box');
           r('width', `${this.upright.rowW + g.widen}px`);
           r('max-width', 'none');
           r('flex-shrink', '0');
